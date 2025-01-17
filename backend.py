@@ -44,7 +44,7 @@ def query_db(query: str):
     Unknown Queries:
 
     If the requested information is unavailable in the ERP system, respond:
-    "Sorry, I don’t have that information. Would you like me to assist further or help you search for it?"
+    "Sorry, I don't know the answer. I need to search Google for the answer."
     Example Prompts and Responses
     User Query: "What are the top-selling dishes this week?"
     AI Response:
