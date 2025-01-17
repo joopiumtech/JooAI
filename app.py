@@ -10,7 +10,7 @@ from agents.tavily_search_agent import tavily_search_agent
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-st.title("JooAI")
+st.title("Joo AI")
 st.write("")
 st.write("")
 
