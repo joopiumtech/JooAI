@@ -14,7 +14,7 @@ st.title("JooAI")
 st.write("")
 st.write("")
 
-message("Hello!, How can I assist you today?", key="welcome_message")
+message("Greetings! How may I assist you today?", key="welcome_message")
 
 # Display chat messages from session state
 for idx, msg in enumerate(st.session_state.messages):
