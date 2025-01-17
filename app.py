@@ -2,7 +2,6 @@ import streamlit as st
 from streamlit_chat import message
 
 from backend import query_db
-from utils import stream_data
 from agents.tavily_search_agent import tavily_search_agent
 
 
@@ -37,7 +36,6 @@ if query:
             response = tavily_search_agent(input=rephrased_query)
             response_text = response
         else:
-            # Ensure stream_data result is converted to a single string
             response_text = response
         
         # Append the AI response to the chat

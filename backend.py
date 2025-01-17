@@ -3,7 +3,6 @@ import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import create_sql_agent
-from agents import tavily_search_agent
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -44,7 +43,10 @@ def query_db(query: str):
     Use a tone that is approachable, professional, and aligned with a customer-focused restaurant environment.
 
     Menu Related Queries:
-    If query is related to 'menu'. Show atleast 30 items and don't include unpublished items
+    If query is related to 'menu'. Show atleast 20 items and don't include unpublished items
+
+    Price Related Queries:
+    If query is related to 'price'. Go the menu table and get the highest value from 'price' column
 
     Unknown Queries:
     If the requested information is unavailable in the ERP system, respond:
