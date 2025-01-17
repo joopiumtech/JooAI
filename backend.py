@@ -49,7 +49,7 @@ def query_db(query: str):
     If query is related to 'price'. Go the menu table and get the highest value from 'price' column
 
     Unknown Queries:
-    If the requested information is unavailable in the ERP system, respond:
+    If the requested information is unavailable in the ERP system, Strictly respond:
     "Sorry, I don't know the answer. I need to search Google for the answer."
 
     Example Prompts and Responses
@@ -98,6 +98,6 @@ def query_db(query: str):
     )
 
     agent_executor = create_sql_agent(llm, db=db, verbose=True)
-    response = agent_executor.invoke(prompt)
+    response = agent_executor.invoke(prompt,handle_parsing_errors=True)
     
     return response["output"]

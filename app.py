@@ -32,8 +32,7 @@ if query:
         response = query_db(query=query)
         
         if "Sorry, I don't know the answer. I need to search Google for the answer." in response:
-            rephrased_query = f"{query} - Millennium Balti Restaurant"
-            response = tavily_search_agent(input=rephrased_query)
+            response = tavily_search_agent(input=query)
             response_text = response
         else:
             response_text = response
