@@ -19,9 +19,9 @@ load_dotenv()
 def tavily_search_agent(input: str):
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-pro",
-        temperature=0,
-        max_retries=2,
-        api_key=os.environ.get("GEMINI_API_KEY")
+        temperature=0,  # Keep temperature low for accuracy
+        max_retries=3,  # Increase retries for robustness
+        api_key=os.getenv("GEMINI_API_KEY")
     )
 
     template = f"""
@@ -36,7 +36,7 @@ def tavily_search_agent(input: str):
 
     tools_for_agent = [
         Tool(
-            name=f"Crawl Google 4 {input}",
+            name=f"Crawl Google for {input}",
             func=search_on_tavily,
             description="useful for get the updated information",
         )
@@ -44,7 +44,7 @@ def tavily_search_agent(input: str):
 
     react_prompt = hub.pull("hwchase17/react")
     agent = create_react_agent(llm=llm, tools=tools_for_agent, prompt=react_prompt)
-    agent_executor = AgentExecutor(agent=agent, tools=tools_for_agent, verbose=True)
+    agent_executor = AgentExecutor(agent=agent, tools=tools_for_agent, verbose=True, handle_parsing_errors=True)
 
     result = agent_executor.invoke(
         input={"input": prompt_template.format_prompt(input=input)}
