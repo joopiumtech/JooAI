@@ -4,24 +4,24 @@ import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import Tool
+from langchain_openai import ChatOpenAI
 from tools.tool import search_on_tavily
 from langchain.agents import (
     create_react_agent,
     AgentExecutor,
 )
 from langchain import hub
-from langchain_core.output_parsers.string import StrOutputParser
 
 from dotenv import load_dotenv
 load_dotenv()
 
 
 def tavily_search_agent(input: str):
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro",
-        temperature=0,  # Keep temperature low for accuracy
-        max_retries=3,  # Increase retries for robustness
-        api_key=os.getenv("GEMINI_API_KEY")
+    llm = ChatOpenAI(
+        model="gpt-4o",
+        temperature=0,
+        max_retries=1,
+        api_key=os.environ.get("OEPNAI_API_KEY")
     )
 
     template = f"""

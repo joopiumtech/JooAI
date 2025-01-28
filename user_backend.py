@@ -1,85 +1,120 @@
 import os
 
 from datetime import date, datetime, time
+from typing import Any
 from utils import initialize_db
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.agent_toolkits import create_sql_agent
 from agents.tavily_search_agent import tavily_search_agent
-from langchain_core.messages import SystemMessage
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
 
 from dotenv import load_dotenv
 load_dotenv()
 
 
+# Initialize database
+db = initialize_db(db_name="roycebalti")
+
+# Initialize the LLM model
+# llm = ChatGoogleGenerativeAI(
+#     model="gemini-1.5-pro",
+#     temperature=0,  # Keep temperature low for accuracy
+#     max_retries=1,  # Increase retries for robustness
+#     api_key=os.getenv("GEMINI_API_KEY"),
+# )
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0,
+    max_retries=1,
+    api_key=os.environ.get("OEPNAI_API_KEY")
+)
+
+
 def query_db_for_user(email: str, query: str):
-    # Initialize database
-    db = initialize_db(db_name="royce_balti")
+    """
+    Authenticates a user by email and processes their query to the database using an LLM-powered agent.
 
-    # Initialize the LLM model
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro",
-        temperature=0,  # Keep temperature low for accuracy
-        max_retries=3,  # Increase retries for robustness
-        api_key=os.getenv("GEMINI_API_KEY"),
-    )
+    Args:
+        email (str): User's email address for authentication.
+        query (str): User's query to be executed on the database.
 
-    # Define the system prompt
-    SQL_PREFIX = """You are an intelligent agent designed to interact with a SQL database and assist customers with their queries about orders, bookings, and restaurant menus. Your task is to construct accurate and syntactically correct SQLite queries to fetch the requested information. Follow these guidelines:
+    Returns:
+        dict: A dictionary containing the AI-generated response.
+    """
 
-    Understand the Database Structure:
-    Always start by inspecting the tables in the database to understand the available data. Never skip this step.
+    def authenticate_user(email: str) -> bool:
+        """Checks if the user exists in the database."""
+        auth_query = f"SELECT * FROM `users` WHERE email = '{email}';"
+        return bool(db.run(auth_query))
 
-    Query Construction:
-    Based on the user's question, create a precise SQLite query that retrieves only the relevant columns. Avoid selecting all columns (*) from a table unless explicitly instructed.
+    def create_agent_executor() -> Any:
+        """Creates and returns an agent executor configured for the database."""
+        toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+        tools = toolkit.get_tools()
 
-    Query Execution and Results:
-    Limit the query to at most 5 results unless the user specifies otherwise.
-    Order the results by a relevant column to present the most meaningful data.
-
-    Error Handling:
-    Double-check the query syntax before execution.
-    If a query fails, revise it and try again.
-
-    Read-Only Access:
-    Only perform SELECT statements. Do not execute any data manipulation statements (INSERT, UPDATE, DELETE, DROP, etc.).
-
-    Response Formation:
-    Use the information returned by the database to provide clear and accurate answers to the user’s questions."""
-
-    # Format the system message
-    system_message = SystemMessage(content=SQL_PREFIX)
-
-    # Check if the user exists in the database
-    auth_query = f"""SELECT * FROM `users` WHERE email = "{email}";"""
-    is_user_exists = db.run(auth_query)
-
-    if is_user_exists:
-        # Create the SQL agent with the system message
-        agent_executor = create_sql_agent(
-            llm=llm, db=db, verbose=True, handle_parsing_errors=True, message_modifier=system_message
+        prompt_template = (
+            """You are an agent designed to interact with a SQL database.
+            Given an input question, create a syntactically correct {dialect} query to run, 
+            then look at the results of the query and return the answer.
+            Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most {top_k} results.
+            You can order the results by a relevant column to return the most interesting examples in the database.
+            You have only access to the following tables 'booking', 'coupon', 'orders', and 'menu'. 
+            If the user asks questions about other tables, respond strictly with "Apologies, you are not authorized to access this information. Feel free to ask about bookings, orders, restaurant services, or general inquiries.".
+            Never query for all columns from a table; only query for the relevant columns given the question.
+            Double-check your query before executing it. If you encounter an error, rewrite the query and try again.
+            Do NOT make any DML statements (INSERT, UPDATE, DELETE, DROP, etc.) to the database.
+            Always start by examining the schema of the most relevant tables.
+            """
         )
+        system_message = prompt_template.format(dialect="mysql", top_k=5)
 
-        try:
-            # Enforce the email constraint for booking-related queries
-            if "booking" in query.lower():
-                query = f"{query.strip()} AND email = '{email}'"
+        return create_react_agent(llm, tools, prompt=system_message)
 
-            # Execute the query using the agent
-            response = agent_executor.invoke({"input": query})
+    def process_query(agent_executor, email: str, query: str) -> str:
+        """Processes the user's query using the agent executor and streams results."""
+        # Append email to queries involving 'booking'
+        if "booking" in query:
+            query = f"{query.strip()} for {email}"
 
-            # Check for fallback response
-            if "I don't know" in response["output"]:
-                response = tavily_search_agent(input=query)  # Use fallback agent for general queries
-                return {"ai_response": response}
-            else:
-                return {"ai_response": response["output"]}
-        except Exception as e:
-            # Handle exceptions gracefully
-            return {"ai_response": f"Error processing query: {str(e)}"}
-    else:
-        # Return an authentication error if the user is not found
-        return {"ai_response": "Email authentication failed. Authentication is required to book a table or place an order. However, you are welcome to ask general inquiries."}
-    
+        final_answer = ""
+        for step in agent_executor.stream(
+            {"messages": [{"role": "user", "content": query}]},
+            stream_mode="values",
+        ):
+            final_answer = step["messages"][-1].content.strip()
+
+        return final_answer
+
+    def handle_fallback(query: str) -> str:
+        """Handles fallback logic if the primary agent cannot fulfill the query."""
+        return tavily_search_agent(input=query)
+
+    # Authenticate the user
+    if not authenticate_user(email):
+        return {
+            "ai_response": (
+                "Email authentication failed. Authentication is required to book a table or place an order. "
+                "However, you are welcome to ask general inquiries."
+            )
+        }
+
+    # Create the agent executor
+    agent_executor = create_agent_executor()
+
+    # Process the query
+    final_answer = process_query(agent_executor, email, query)
+
+    # Check if fallback is needed
+    if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don't have"]):
+        fallback_response = handle_fallback(query)
+        return {"ai_response": fallback_response}
+
+    return {"ai_response": final_answer}
+
+
+
 
 def book_table(
     name: str,
@@ -94,7 +129,7 @@ def book_table(
     updated_at: str,
 ):
     # Generate timestamps
-    status = "Pending"
+    status = 0
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -102,7 +137,7 @@ def book_table(
     date_str = date.strftime("%Y-%m-%d")
     time_str = time.strftime("%H:%M:%S")
 
-    db = initialize_db(db_name="royce_balti")
+    db = initialize_db(db_name="roycebalti")
     query = f"""
     INSERT INTO bookings (name, phone, email, date, time, guests, message, type, status, created_at, updated_at)
     VALUES ('{name}', '{phone}', '{email}', '{date_str}', '{time_str}', '{guests}', '{message}', '{booking_type}', '{status}', '{created_at}', '{updated_at}')

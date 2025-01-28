@@ -1,104 +1,85 @@
 import os
-
-from fastapi import HTTPException
+from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.agent_toolkits import create_sql_agent
 from agents.tavily_search_agent import tavily_search_agent
 from utils import initialize_db
+from langgraph.prebuilt import create_react_agent
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain import hub
+from langchain_openai import ChatOpenAI
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
 
+# Initialize database
+db = initialize_db(db_name="roycebalti")
+
+# Initialize the LLM model
+# llm = ChatGoogleGenerativeAI(
+#     model="gemini-1.5-pro",
+#     temperature=0,  # Keep temperature low for accuracy
+#     max_retries=1,  # Increase retries for robustness
+#     api_key=os.getenv("GEMINI_API_KEY"),
+# )
+
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0,
+    max_retries=1,
+    api_key=os.environ.get("OEPNAI_API_KEY")
+)
+
+
 def query_db_for_merchant(query: str):
     """
-    Query the database for merchant-related information using a SQL agent and LLM.
+    Processes a query for a merchant using an LLM-powered agent.
 
     Args:
-        query (str): The merchant's query string.
+        query (str): The user's query to execute on the database.
 
     Returns:
-        dict: A dictionary containing the original query and the AI-generated response.
-
-    Raises:
-        HTTPException: If an error occurs during query execution.
-    """
-    db = initialize_db(db_name="royce_balti")
-
-    # Initialize the LLM model
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro",
-        temperature=0,  # Keep temperature low for accuracy
-        max_retries=3,  # Increase retries for robustness
-        api_key=os.getenv("GEMINI_API_KEY"),
-    )
-
-    # Define constants
-    RESTAURANT_NAME = "Royce Balti"
-
-    # Craft a dynamic prompt with the query injected
-    prompt_template = f"""
-    Restaurant Name: {RESTAURANT_NAME}
-
-    You are an AI merchant chatbot integrated with {RESTAURANT_NAME}'s SQL database. Your job is to provide clear, accurate, and actionable responses to the merchant query: {query}.
-
-    Response Guidelines:
-
-    Context-Driven Responses:
-    Use only the data available in the SQL database (menu, orders, inventory, bookings, etc.).
-    Always prioritize accuracy and relevance.
-
-    Clarity and Conciseness:
-    Provide precise answers without unnecessary details.
-
-    Data Privacy:
-    Do not disclose sensitive internal identifiers unless explicitly requested.
-
-    Formatting:
-    Use clear numerical formats (e.g., "Total sales: $5,432").
-    Present data in a table format when listing multiple items (e.g., menus, reports).
-
-    Handling Specific Queries:
-    For price-related queries, retrieve the highest value from the "price" column of the menu table.
-
-    Tone:
-    Maintain a professional yet approachable tone suitable for a restaurant setting.
-
-    Examples:
-    Query: "What are the top-selling dishes this week?"
-    Response: "The top-selling dishes this week are Chicken Tikka Masala, Lamb Biryani, and Paneer Butter Masala."
-
-    Query: "How many orders were completed yesterday?"
-    Response: "A total of 56 orders were completed yesterday."
-
-    Query: "What was the total revenue for last week?"
-    Response: "The total revenue for last week was $7,890."
-
-    Query: "How many new customers did we have this month?"
-    Response: "You had 25 new customers this month."
+        dict: A dictionary containing the AI-generated response.
     """
 
-    # Format the system message
-    system_message = prompt_template.format(dialect="mysql", top_k=5)
+    def create_agent_executor() -> Any:
+        """Creates and returns an agent executor configured for the database."""
+        toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+        tools = toolkit.get_tools()
 
-    # Create a SQL agent with verbose output for debugging
-    agent_executor = create_sql_agent(
-        llm=llm, db=db, verbose=True, handle_parsing_errors=True, state_modifier=system_message
-    )
+        # Pull system prompt template and configure it
+        prompt_template = hub.pull("langchain-ai/sql-agent-system-prompt")
+        system_message = prompt_template.format(dialect="mysql", top_k=5)
 
-    # Execute the prompt and handle parsing errors gracefully
-    try:
-        response = agent_executor.invoke(query)
-        if "I don't know" in response["output"]:
-            fallback_response = tavily_search_agent(input=query)
-            return {
-                "ai_response": fallback_response,
-            }
-        else:
-            return {
-                "ai_response": response["output"],
-            }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+        return create_react_agent(llm, tools, prompt=system_message)
+
+    def process_query(agent_executor, query: str) -> str:
+        """Processes the user's query using the agent executor and streams results."""
+        final_answer = ""
+        for step in agent_executor.stream(
+            {"messages": [{"role": "user", "content": query}]},
+            stream_mode="values",
+        ):
+            final_answer = step["messages"][-1].content.strip()
+
+        return final_answer
+
+    def handle_fallback(query: str) -> str:
+        """Handles fallback logic if the primary agent cannot fulfill the query."""
+        return tavily_search_agent(input=query)
+
+    # Create the agent executor
+    agent_executor = create_agent_executor()
+
+    # Process the query
+    final_answer = process_query(agent_executor, query)
+
+    # Check if fallback is needed
+    if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don't have"]):
+        fallback_response = handle_fallback(query)
+        return {"ai_response": fallback_response}
+
+    return {"ai_response": final_answer}
