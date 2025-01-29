@@ -1,13 +1,16 @@
 import os
+import ast
 
 from datetime import date, datetime, time
 from typing import Any
 from utils import initialize_db
 from langchain_google_genai import ChatGoogleGenerativeAI
-from agents.tavily_search_agent import tavily_search_agent
+from agents.tavily_search_agent import tavily_search
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain.memory import ConversationBufferMemory
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -17,19 +20,25 @@ load_dotenv()
 db = initialize_db(db_name="roycebalti")
 
 # Initialize the LLM model
-# llm = ChatGoogleGenerativeAI(
-#     model="gemini-1.5-pro",
-#     temperature=0,  # Keep temperature low for accuracy
-#     max_retries=1,  # Increase retries for robustness
-#     api_key=os.getenv("GEMINI_API_KEY"),
-# )
-
 llm = ChatOpenAI(
     model="gpt-4o",
     temperature=0,
     max_retries=1,
     api_key=os.environ.get("OEPNAI_API_KEY")
 )
+
+
+def get_user_memory(email: str):
+    """Retrieve the last few interactions from MySQL memory."""
+    query = f"""SELECT user_query, ai_response FROM user_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 5"""
+    response = db.run(query)
+    return response
+
+
+def store_user_memory(email: str, user_query: str, ai_response: str):
+    """Store user interactions in MySQL memory."""
+    query = f"""INSERT INTO user_memory (email, user_query, ai_response) VALUES ('{email}', '{user_query.strip()}', '{ai_response}')"""
+    db.run(query)
 
 
 def query_db_for_user(email: str, query: str):
@@ -43,40 +52,50 @@ def query_db_for_user(email: str, query: str):
     Returns:
         dict: A dictionary containing the AI-generated response.
     """
+    auth_query = f"SELECT * FROM `users` WHERE email = '{email}';"
+    is_user_exists = db.run(auth_query)
 
-    def authenticate_user(email: str) -> bool:
-        """Checks if the user exists in the database."""
-        auth_query = f"SELECT * FROM `users` WHERE email = '{email}';"
-        return bool(db.run(auth_query))
-
-    def create_agent_executor() -> Any:
+    if is_user_exists:
         """Creates and returns an agent executor configured for the database."""
         toolkit = SQLDatabaseToolkit(db=db, llm=llm)
         tools = toolkit.get_tools()
 
-        prompt_template = (
-            """You are an agent designed to interact with a SQL database.
-            Given an input question, create a syntactically correct {dialect} query to run, 
-            then look at the results of the query and return the answer.
-            Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most {top_k} results.
-            You can order the results by a relevant column to return the most interesting examples in the database.
-            You have only access to the following tables 'booking', 'coupon', 'orders', and 'menu'. 
-            If the user asks questions about other tables, respond strictly with "Apologies, you are not authorized to access this information. Feel free to ask about bookings, orders, restaurant services, or general inquiries.".
-            Never query for all columns from a table; only query for the relevant columns given the question.
-            Double-check your query before executing it. If you encounter an error, rewrite the query and try again.
-            Do NOT make any DML statements (INSERT, UPDATE, DELETE, DROP, etc.) to the database.
-            Always start by examining the schema of the most relevant tables.
-            """
-        )
+        # Retrieve memory context
+        past_interactions = get_user_memory(email) or "[]"
+        past_interactions = ast.literal_eval(past_interactions)
+
+        # Check if past_interactions has any data
+        if past_interactions:
+            memory_context = "\n".join([f"user: {q}\nai_response: {r}" for q, r in past_interactions])
+        else:
+            memory_context = ""  # Empty memory context if no past interactions
+
+
+        prompt_template = f"""You are an intelligent agent designed to interact with a SQL database for a restaurant chatbot.
+        Given an previous intractions: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information. Based on
+        
+        Guidelines:
+        Always limit queries to at most {{top_k}} results unless the user specifies otherwise.
+        Order results by relevance, such as popularity, price, or reservation time.
+        Only query for necessary columns—never use SELECT *.
+        Always check the database schema for the most relevant tables before constructing your query.
+        If a query fails, refine it and try again.
+        Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
+        If query is related to booking. Only fetch the booking details with email: {email}. If booking with {email} not exists. Strictly respond with "Unable to find any booking details associated with the email address {email}. Please double-check the information or contact us for further assistance."
+        If you don't know the answer. Strictly respond with 'I don't know"
+        
+        Capabilities:
+        Menu Queries: Retrieve dish details, prices, availability, and ingredients.
+        Table Booking: Check reservation availability and assist with booking.
+        Order Management: Retrieve order details and status.
+        General Queries: Answer general knowledge questions.
+        
+        Exclude from response:
+        Don't include any private restaurant details in the response (eg: Total sales details). If user ask about it. Strictly respond with. Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations.
+
+        Ensure the generated query is precise, efficient, and safe to execute."""
         system_message = prompt_template.format(dialect="mysql", top_k=5)
-
-        return create_react_agent(llm, tools, prompt=system_message)
-
-    def process_query(agent_executor, email: str, query: str) -> str:
-        """Processes the user's query using the agent executor and streams results."""
-        # Append email to queries involving 'booking'
-        if "booking" in query:
-            query = f"{query.strip()} for {email}"
+        agent_executor = create_react_agent(llm, tools, prompt=system_message)
 
         final_answer = ""
         for step in agent_executor.stream(
@@ -84,35 +103,44 @@ def query_db_for_user(email: str, query: str):
             stream_mode="values",
         ):
             final_answer = step["messages"][-1].content.strip()
+            replacements = {
+                "'": "''",
+                '"': '""',
+                "\\": "\\\\",
+            }
 
-        return final_answer
+            for old, new in replacements.items():
+                final_answer = final_answer.replace(old, new)
 
-    def handle_fallback(query: str) -> str:
-        """Handles fallback logic if the primary agent cannot fulfill the query."""
-        return tavily_search_agent(input=query)
 
-    # Authenticate the user
-    if not authenticate_user(email):
+        if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don''t have", "I don''t know."]):
+            tavily_response = tavily_search(email=email, input=query)
+
+            replacements = {
+                "'": "''",
+                '"': '""',
+                "\\": "\\\\",
+            }
+
+            for old, new in replacements.items():
+                tavily_response = tavily_response.replace(old, new)
+
+            # Store the external response in memory instead of "I don't know"
+            store_user_memory(email, query, tavily_response)
+            return {"ai_response": tavily_response}
+        
+        # Store the valid AI-generated response in memory
+        store_user_memory(email, query, final_answer)   
+
+        return {"ai_response": final_answer}
+
+    else:
         return {
-            "ai_response": (
-                "Email authentication failed. Authentication is required to book a table or place an order. "
-                "However, you are welcome to ask general inquiries."
-            )
-        }
-
-    # Create the agent executor
-    agent_executor = create_agent_executor()
-
-    # Process the query
-    final_answer = process_query(agent_executor, email, query)
-
-    # Check if fallback is needed
-    if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don't have"]):
-        fallback_response = handle_fallback(query)
-        return {"ai_response": fallback_response}
-
-    return {"ai_response": final_answer}
-
+                "ai_response": (
+                    "Email authentication failed. Authentication is required to book a table or place an order."
+                    "However, you are welcome to ask general inquiries."
+                )
+            }
 
 
 
@@ -136,8 +164,7 @@ def book_table(
     # Convert date and time to strings for SQL
     date_str = date.strftime("%Y-%m-%d")
     time_str = time.strftime("%H:%M:%S")
-
-    db = initialize_db(db_name="roycebalti")
+    
     query = f"""
     INSERT INTO bookings (name, phone, email, date, time, guests, message, type, status, created_at, updated_at)
     VALUES ('{name}', '{phone}', '{email}', '{date_str}', '{time_str}', '{guests}', '{message}', '{booking_type}', '{status}', '{created_at}', '{updated_at}')

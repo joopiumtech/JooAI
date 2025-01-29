@@ -1,3 +1,4 @@
+import ast
 import os
 
 
@@ -13,10 +14,29 @@ from langchain.agents import (
 from langchain import hub
 
 from dotenv import load_dotenv
+
+from utils import initialize_db
+
 load_dotenv()
 
+# Initialize database
+db = initialize_db(db_name="roycebalti")
 
-def tavily_search_agent(input: str):
+
+def get_user_memory(email: str):
+    """Retrieve the last few interactions from MySQL memory."""
+    query = f"""SELECT user_query, ai_response FROM user_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 5"""
+    response = db.run(query)
+    return response
+
+
+def store_user_memory(email: str, user_query: str, ai_response: str):
+    """Store user interactions in MySQL memory."""
+    query = f"""INSERT INTO user_memory (email, user_query, ai_response) VALUES ('{email}', '{user_query.strip()}', '{ai_response}')"""
+    db.run(query)
+
+
+def tavily_search(email: str, input: str):
     llm = ChatOpenAI(
         model="gpt-4o",
         temperature=0,
@@ -24,8 +44,19 @@ def tavily_search_agent(input: str):
         api_key=os.environ.get("OEPNAI_API_KEY")
     )
 
+
+    # Retrieve memory context
+    past_interactions = get_user_memory(email) or "[]"
+    past_interactions = ast.literal_eval(past_interactions)
+
+    # Check if past_interactions has any data
+    if past_interactions:
+        memory_context = "\n".join([f"user: {q}\nai_response: {r}" for q, r in past_interactions])
+    else:
+        memory_context = ""  # Empty memory context if no past interactions
+
     template = f"""
-    Based on the user input: "{input}", if you can answer it directly, do so. If you cannot find the answer immediately, 
+    Based on the chat history: {memory_context} and user input: "{input}", if you can answer it directly, do so. If you cannot find the answer immediately, 
     you should either search for updated information on the web or request more clarification from the user. 
     Please make sure the action step is clear and actionable.
     """

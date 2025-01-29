@@ -2,7 +2,7 @@ import os
 from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from agents.tavily_search_agent import tavily_search_agent
+from agents.tavily_search_agent import tavily_search
 from utils import initialize_db
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
@@ -69,7 +69,7 @@ def query_db_for_merchant(query: str):
 
     def handle_fallback(query: str) -> str:
         """Handles fallback logic if the primary agent cannot fulfill the query."""
-        return tavily_search_agent(input=query)
+        return tavily_search(input=query)
 
     # Create the agent executor
     agent_executor = create_agent_executor()
@@ -83,3 +83,4 @@ def query_db_for_merchant(query: str):
         return {"ai_response": fallback_response}
 
     return {"ai_response": final_answer}
+
