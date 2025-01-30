@@ -20,6 +20,14 @@ load_dotenv()
 db = initialize_db(db_name="roycebalti")
 
 # Initialize the LLM model
+# llm = ChatGoogleGenerativeAI(
+#     model="gemini-1.5-pro",
+#     temperature=0,  # Keep temperature low for accuracy
+#     max_retries=1,  # Increase retries for robustness
+#     api_key=os.getenv("GEMINI_API_KEY"),
+# )
+
+
 llm = ChatOpenAI(
     model="gpt-4o",
     temperature=0,
@@ -72,7 +80,8 @@ def query_db_for_user(email: str, query: str):
 
 
         prompt_template = f"""You are an intelligent agent designed to interact with a SQL database for a restaurant chatbot.
-        Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information. Based on
+        Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information.
+        You have only access to the following tables bookings, orders, menu, coupons, users.
         
         Guidelines:
         Always limit queries to at most {{top_k}} results unless the user specifies otherwise.

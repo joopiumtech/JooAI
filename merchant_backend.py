@@ -79,7 +79,7 @@ def query_db_for_merchant(email: str, query: str):
 
 
         prompt_template = f"""You are an intelligent agent designed to interact with a SQL database for a restaurant chatbot.
-        Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information. Based on
+        Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information.
         
         Guidelines:
         Always limit queries to at most {{top_k}} results unless the user specifies otherwise.
