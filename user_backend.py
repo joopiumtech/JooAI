@@ -24,7 +24,7 @@ llm = ChatOpenAI(
     model="gpt-4o",
     temperature=0,
     max_retries=1,
-    api_key=os.environ.get("OEPNAI_API_KEY")
+    api_key=os.environ.get("OPENAI_API_KEY")
 )
 
 
@@ -72,7 +72,7 @@ def query_db_for_user(email: str, query: str):
 
 
         prompt_template = f"""You are an intelligent agent designed to interact with a SQL database for a restaurant chatbot.
-        Given an previous intractions: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information. Based on
+        Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information. Based on
         
         Guidelines:
         Always limit queries to at most {{top_k}} results unless the user specifies otherwise.
@@ -82,7 +82,7 @@ def query_db_for_user(email: str, query: str):
         If a query fails, refine it and try again.
         Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
         If query is related to booking. Only fetch the booking details with email: {email}. If booking with {email} not exists. Strictly respond with "Unable to find any booking details associated with the email address {email}. Please double-check the information or contact us for further assistance."
-        If you don't know the answer. Strictly respond with 'I don't know"
+        If you don't know the answer. Strictly respond with "I don't know"
         
         Capabilities:
         Menu Queries: Retrieve dish details, prices, availability, and ingredients.
@@ -91,7 +91,7 @@ def query_db_for_user(email: str, query: str):
         General Queries: Answer general knowledge questions.
         
         Exclude from response:
-        Don't include any private restaurant details in the response (eg: Total sales details). If user ask about it. Strictly respond with. Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations.
+        Don't include any private restaurant details in the response (eg: Total sales details, Total orders). If user ask about it. Strictly respond with. "Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations."
 
         Ensure the generated query is precise, efficient, and safe to execute."""
         system_message = prompt_template.format(dialect="mysql", top_k=5)
@@ -113,7 +113,7 @@ def query_db_for_user(email: str, query: str):
                 final_answer = final_answer.replace(old, new)
 
 
-        if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don''t have", "I don''t know."]):
+        if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don''t have", "I don''t know.", "I don''t know"]):
             tavily_response = tavily_search(email=email, input=query)
 
             replacements = {
