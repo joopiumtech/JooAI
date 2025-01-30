@@ -89,7 +89,7 @@ class BookTableRequest(BaseModel):
     phone: str
     email: str
     date: date
-    time: time
+    time: str
     guests: str
     message: str
     booking_type: str
@@ -102,7 +102,7 @@ class BookTableResponse(BaseModel):
     phone: str
     email: str
     date: date
-    time: time
+    time: str
     guests: str
     message: str
     booking_type: str

@@ -3,7 +3,7 @@ import ast
 
 from datetime import date, datetime, time
 from typing import Any
-from utils import initialize_db
+from utils import convert_to_24hr, initialize_db
 from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.tavily_search_agent import tavily_search
 from langchain_openai import ChatOpenAI
@@ -158,7 +158,7 @@ def book_table(
     phone: str,
     email: str,
     date: date,
-    time: time,
+    time: str,
     guests: str,
     message: str,
     booking_type: str,
@@ -170,13 +170,15 @@ def book_table(
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Convert date and time to strings for SQL
+    # Convert date to string for SQL
     date_str = date.strftime("%Y-%m-%d")
-    time_str = time.strftime("%H:%M:%S")
     
+    # Convert user input time string to 24-hour format
+    time_str_24hr = convert_to_24hr(time)
+
     query = f"""
     INSERT INTO bookings (name, phone, email, date, time, guests, message, type, status, created_at, updated_at)
-    VALUES ('{name}', '{phone}', '{email}', '{date_str}', '{time_str}', '{guests}', '{message}', '{booking_type}', '{status}', '{created_at}', '{updated_at}')
+    VALUES ('{name}', '{phone}', '{email}', '{date_str}', '{time_str_24hr}', '{guests}', '{message}', '{booking_type}', '{status}', '{created_at}', '{updated_at}')
     """
     db.run(query)
 
@@ -186,7 +188,7 @@ def book_table(
         "phone": phone,
         "email": email,
         "date": date,
-        "time": time,
+        "time": time_str_24hr,
         "guests": guests,
         "message": message,
         "booking_type": booking_type,
