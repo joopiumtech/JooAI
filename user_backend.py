@@ -91,8 +91,7 @@ def query_db_for_user(email: str, query: str):
         If a query fails, refine it and try again.
         Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
         If you don't know the answer. Strictly respond with "I don't know".
-
-        
+ 
         Capabilities:
         Menu Queries: Retrieve dish details, prices, availability.
         Booking Queries: If query is related to booking. Only retrieve the booking details for user: {email}. If booking with {email} not exists. Strictly respond with "Unable to find any booking details associated with the email address {email}. Please double-check the information or contact us for further assistance."
@@ -100,7 +99,6 @@ def query_db_for_user(email: str, query: str):
         
         Exclude from response:
         Don't include any private restaurant details in the response (eg: Total sales details, Total orders). If user ask about it. Strictly respond with. "Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations."
-
 
         Example Response:
         user: What are the available pasta dishes and their prices?
