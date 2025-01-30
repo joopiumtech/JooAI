@@ -99,7 +99,7 @@ def query_db_for_user(email: str, query: str):
         General Queries: Answer general knowledge questions.
         
         Exclude from response:
-        Don't include any private restaurant details in the response (eg: Total sales details, Total orders). If user ask about it. Strictly respond with. "Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations."
+        Don't include any private restaurant details in the response (eg: Total sales details, Total orders, Total bookings). If user ask about it. Strictly respond with. "Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations."
 
         Ensure the generated query is precise, efficient, and safe to execute."""
         system_message = prompt_template.format(dialect="mysql", top_k=5)
