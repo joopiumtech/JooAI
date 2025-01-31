@@ -38,7 +38,7 @@ llm = ChatOpenAI(
 
 def get_user_memory(email: str):
     """Retrieve the last few interactions from MySQL memory."""
-    query = f"""SELECT user_query, ai_response FROM user_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 2"""
+    query = f"""SELECT user_query, ai_response FROM user_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 3"""
     response = db.run(query)
     return response
 
