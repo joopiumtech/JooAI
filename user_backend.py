@@ -99,17 +99,7 @@ def query_db_for_user(email: str, query: str):
         
         Exclude from response:
         Don't include any private restaurant details in the response (eg: Total sales details, Total orders). If user ask about it. Strictly respond with. "Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations."
-
-        Example Response:
-        user: What are the available pasta dishes and their prices?
-        ai_response: Here are some available pasta dishes:\nSpaghetti Carbonara - $12.99\nPenne Alfredo - $14.50
-
-        user: Are there any available discount coupons?
-        ai_response: Here are some available discount coupons:\nSAVE10 - 10% off (Expires Feb 15, 2025)\nDINNER20 - 20% off (Expires March 1, 2025)
-
-        user: How many total orders has the restaurant received this month?
-        ai_response: Sorry, I can't provide authorized information from the restaurant. You can ask queries related to your bookings, orders, and other general information.
-
+        
         Ensure the generated query is precise, efficient, and safe to execute."""
         system_message = prompt_template.format(dialect="mysql", top_k=5)
         agent_executor = create_react_agent(llm, tools, prompt=system_message)
