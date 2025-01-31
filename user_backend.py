@@ -93,7 +93,7 @@ def query_db_for_user(email: str, query: str):
         If you don't know the answer. Strictly respond with "I don't know".
  
         Capabilities:
-        Menu Queries: Retrieve dish details, prices, availability.
+        Menu Queries: Retrieve dish details, prices, availability. (NOTE: Exclude price 0.00)
         Booking Queries: If query is related to booking. Only retrieve the booking details for user: {email}. If booking with {email} not exists. Strictly respond with "Unable to find any booking details associated with the email address {email}. Please double-check the information or contact us for further assistance."
         General Queries: Answer general knowledge questions.
         
