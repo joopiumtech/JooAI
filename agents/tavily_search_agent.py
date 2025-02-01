@@ -41,9 +41,8 @@ def tavily_search(email: str, input: str):
         model="gpt-4o",
         temperature=0,
         max_retries=1,
-        api_key=os.environ.get("OEPNAI_API_KEY")
+        api_key=os.environ.get("OEPNAI_API_KEY"),
     )
-
 
     # Retrieve memory context
     past_interactions = get_user_memory(email) or "[]"
@@ -51,7 +50,9 @@ def tavily_search(email: str, input: str):
 
     # Check if past_interactions has any data
     if past_interactions:
-        memory_context = "\n".join([f"user: {q}\nai_response: {r}" for q, r in past_interactions])
+        memory_context = "\n".join(
+            [f"user: {q}\nai_response: {r}" for q, r in past_interactions]
+        )
     else:
         memory_context = ""  # Empty memory context if no past interactions
 
@@ -61,9 +62,7 @@ def tavily_search(email: str, input: str):
     Please make sure the action step is clear and actionable.
     """
 
-    prompt_template = PromptTemplate(
-        template=template, input_variables=["input"]
-    )
+    prompt_template = PromptTemplate(template=template, input_variables=["input"])
 
     tools_for_agent = [
         Tool(
@@ -75,7 +74,9 @@ def tavily_search(email: str, input: str):
 
     react_prompt = hub.pull("hwchase17/react")
     agent = create_react_agent(llm=llm, tools=tools_for_agent, prompt=react_prompt)
-    agent_executor = AgentExecutor(agent=agent, tools=tools_for_agent, verbose=True, handle_parsing_errors=True)
+    agent_executor = AgentExecutor(
+        agent=agent, tools=tools_for_agent, verbose=True, handle_parsing_errors=True
+    )
 
     result = agent_executor.invoke(
         input={"input": prompt_template.format_prompt(input=input)}

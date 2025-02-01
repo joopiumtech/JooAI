@@ -3,23 +3,31 @@ import ast
 
 from datetime import date, datetime, time
 from typing import Any
-from utils import convert_to_24hr, initialize_db
+from utils import (
+    convert_to_24hr,
+    fetch_restaurant_name,
+    get_memory,
+    initialize_db,
+    store_memory,
+)
 from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.tavily_search_agent import tavily_search
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain.memory import ConversationBufferMemory
+from langchain_deepseek import ChatDeepSeek
 
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
 # Initialize database
-db = initialize_db(db_name="roycebalti")
+db = initialize_db(db_name="le_salute_thame")
 
-# Initialize the LLM model
+# Initialize LLM model
 # llm = ChatGoogleGenerativeAI(
 #     model="gemini-1.5-pro",
 #     temperature=0,  # Keep temperature low for accuracy
@@ -32,21 +40,16 @@ llm = ChatOpenAI(
     model="gpt-4o",
     temperature=0,
     max_retries=1,
-    api_key=os.environ.get("OPENAI_API_KEY")
+    api_key=os.environ.get("OPENAI_API_KEY"),
 )
 
 
-def get_user_memory(email: str):
-    """Retrieve the last few interactions from MySQL memory."""
-    query = f"""SELECT user_query, ai_response FROM user_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 3"""
-    response = db.run(query)
-    return response
-
-
-def store_user_memory(email: str, user_query: str, ai_response: str):
-    """Store user interactions in MySQL memory."""
-    query = f"""INSERT INTO user_memory (email, user_query, ai_response) VALUES ('{email}', '{user_query.strip()}', '{ai_response}')"""
-    db.run(query)
+# llm = ChatDeepSeek(
+#     model="deepseek-chat",
+#     temperature=0,
+#     max_retries=1,
+#     api_key=os.environ.get()
+# )
 
 
 def query_db_for_user(email: str, query: str):
@@ -69,39 +72,85 @@ def query_db_for_user(email: str, query: str):
         tools = toolkit.get_tools()
 
         # Retrieve memory context
-        past_interactions = get_user_memory(email) or "[]"
+        past_interactions = get_memory(db=db, email=email) or "[]"
         past_interactions = ast.literal_eval(past_interactions)
 
         # Check if past_interactions has any data
         if past_interactions:
-            memory_context = "\n".join([f"user: {q}\nai_response: {r}" for q, r in past_interactions])
+            memory_context = "\n".join(
+                [f"user: {q}\nai_response: {r}" for q, r in past_interactions]
+            )
         else:
             memory_context = ""  # Empty memory context if no past interactions
 
+        # HYPERPARAMETERS
+        RESTAURANT_NAME = fetch_restaurant_name(db=db)
 
-        prompt_template = f"""You are an intelligent agent designed to interact with a SQL database for a restaurant chatbot.
-        Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information.
-        You have only access to the following tables bookings, orders, menu, coupons, users.
-        
-        Guidelines:
-        Always limit queries to at most {{top_k}} results unless the user specifies otherwise.
-        Order results by relevance, such as popularity, price, or reservation time.
-        Only query for necessary columns—never use SELECT *.
-        Always check the database schema for the most relevant tables before constructing your query.
-        If a query fails, refine it and try again.
-        Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
-        If you don't know the answer. Strictly respond with "I don't know".
- 
-        Capabilities:
-        Menu Queries: Retrieve dish details, prices, availability. (NOTE: Exclude price 0.00)
-        Booking Queries: If query is related to booking. Only retrieve the booking details for user: {email}. If booking with {email} not exists. Strictly respond with "Unable to find booking details associated with the email address {email}. Please double-check the information or contact us for further assistance."
-        General Queries: Answer general knowledge questions.
-        
-        Exclude from response:
-        Don't include any private restaurant details in the response (eg: Total sales details, Total orders). If user ask about it. Strictly respond with. "Sorry, I can't provide authorized informations from the restaurant. You can ask quries related about your bookings, orders, and other general informations."
-        Dish recommendations, generic answers about the business but anything specific in our database is prohibited to the public. Eg: a customer can ask what is the most popular dish , but he cannot ask how many times it is ordered 
-        
-        Ensure the generated query is precise, efficient, and safe to execute."""
+        prompt_template = f"""Restaurant Name: {RESTAURANT_NAME}
+
+Role: You are an intelligent agent designed to interact with a SQL database for a {RESTAURANT_NAME} restaurant chatbot. Your primary role is to assist customers by retrieving relevant information from the database while adhering to strict privacy and security guidelines based on the chat history: {memory_context} and input question: {query}.
+
+**Database Access**
+You have access to the following tables -
+bookings: Contains customer reservation details.
+menu: Contains dish details, prices, and availability.
+coupons: Contains discount codes and offers.
+feedbacks: Contains customer feedback.
+
+**Guidelines**
+Data Privacy:
+Never share private restaurant details (e.g., total sales, total orders, billing details). If asked, respond with: "Sorry, I can't provide authorized information from the restaurant. You can ask about your bookings, orders, and other general information."
+Never share dish recommendations or generic business insights (e.g., how many times a dish was ordered).
+
+**Query Construction**
+Always limit queries to at most {{top_k}} results unless the user specifies otherwise.
+Order results by relevance (e.g., popularity, price, reservation time).
+Only query for necessary columns—never use SELECT *.
+Always check the database schema for the most relevant tables before constructing your query.
+If a query fails, refine it and try again.
+
+**Restrictions**
+Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
+If the user asks for information beyond the available tables, respond with: "I'm unable to provide authorized details. Please feel free to ask about your reservations, orders, {RESTAURANT_NAME} related services or general informations."
+If you don't know the answer, respond with: "I don't know."
+
+**Capabilities**
+Menu Queries: Retrieve dish details, prices, and availability. Exclude dishes with a price of 0.00.
+Booking Queries: Only retrieve booking details for the user with the email {email}. If no booking exists for {email}, respond with: "There is no booking details associated with email address {email}"
+General Queries: Answer general knowledge questions related to the restaurant.
+
+**Examples**
+Menu Query -
+    User: "What are the vegetarian dishes available?"
+    Query:
+    sql
+    SELECT name, price, active  
+    FROM menu  
+    WHERE category = 'Vegetarian' AND price > 0.00  
+    LIMIT {{top_k}};  
+
+Booking Query -
+    User: "Can you tell me my reservation details?"
+    Query:
+    sql
+    SELECT id, time, guests  
+    FROM bookings  
+    WHERE email = '{email}'  
+    LIMIT {{top_k}};
+
+General Query -
+    User: "What are your opening hours?"
+    Response: "Our opening hours are from 11:00 AM to 10:00 PM."
+
+Unauthorized Query -
+    User: "How many orders were placed last month?"
+    Response: "Sorry, I can't provide authorized information from the restaurant. You can ask about your bookings, orders, and other general information."
+
+**Final Notes**
+Always ensure the generated query is precise, efficient, and safe to execute.
+If the user’s query is ambiguous or unclear, ask for clarification before proceeding.
+
+Maintain a polite and professional tone in all responses."""
         system_message = prompt_template.format(dialect="mysql", top_k=5)
         agent_executor = create_react_agent(llm, tools, prompt=system_message)
 
@@ -120,8 +169,16 @@ def query_db_for_user(email: str, query: str):
             for old, new in replacements.items():
                 final_answer = final_answer.replace(old, new)
 
-
-        if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don''t have", "I don''t know.", "I don''t know"]):
+        if any(
+            phrase in final_answer
+            for phrase in [
+                "I cannot retrieve",
+                "not enough information",
+                "I don''t have",
+                "I don''t know.",
+                "I don''t know",
+            ]
+        ):
             tavily_response = tavily_search(email=email, input=query)
 
             replacements = {
@@ -134,22 +191,23 @@ def query_db_for_user(email: str, query: str):
                 tavily_response = tavily_response.replace(old, new)
 
             # Store the external response in memory instead of "I don't know"
-            store_user_memory(email, query, tavily_response)
+            store_memory(
+                db=db, email=email, user_query=query, ai_response=tavily_response
+            )
             return {"ai_response": tavily_response}
-        
+
         # Store the valid AI-generated response in memory
-        store_user_memory(email, query, final_answer)   
+        store_memory(db=db, email=email, user_query=query, ai_response=final_answer)
 
         return {"ai_response": final_answer}
 
     else:
         return {
-                "ai_response": (
-                    "Email authentication failed. Authentication is required to book a table or place an order."
-                    "However, you are welcome to ask general inquiries."
-                )
-            }
-
+            "ai_response": (
+                "Email authentication failed. Authentication is required to book a table or place an order."
+                "However, you are welcome to ask general inquiries."
+            )
+        }
 
 
 def book_table(
@@ -160,7 +218,6 @@ def book_table(
     time: str,
     guests: str,
     message: str,
-    booking_type: str,
     created_at: str,
     updated_at: str,
 ):
@@ -171,13 +228,13 @@ def book_table(
 
     # Convert date to string for SQL
     date_str = date.strftime("%Y-%m-%d")
-    
+
     # Convert user input time string to 24-hour format
     time_str_24hr = convert_to_24hr(time)
 
     query = f"""
     INSERT INTO bookings (name, phone, email, date, time, guests, message, type, status, created_at, updated_at)
-    VALUES ('{name}', '{phone}', '{email}', '{date_str}', '{time_str_24hr}', '{guests}', '{message}', '{booking_type}', '{status}', '{created_at}', '{updated_at}')
+    VALUES ('{name}', '{phone}', '{email}', '{date_str}', '{time_str_24hr}', '{guests}', '{message}', '{1}', '{status}', '{created_at}', '{updated_at}')
     """
     db.run(query)
 
@@ -190,5 +247,4 @@ def book_table(
         "time": time_str_24hr,
         "guests": guests,
         "message": message,
-        "booking_type": booking_type,
     }

@@ -4,7 +4,7 @@ from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.tavily_search_agent import tavily_search
-from utils import initialize_db
+from utils import initialize_db, store_memory, get_memory
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain import hub
@@ -12,6 +12,7 @@ from langchain_openai import ChatOpenAI
 
 # Load environment variables
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -31,21 +32,8 @@ llm = ChatOpenAI(
     model="gpt-4o",
     temperature=0,
     max_retries=1,
-    api_key=os.environ.get("OPENAI_API_KEY")
+    api_key=os.environ.get("OPENAI_API_KEY"),
 )
-
-
-def get_merchant_memory(email: str):
-    """Retrieve the last few interactions from MySQL memory."""
-    query = f"""SELECT merchant_query, ai_response FROM merchant_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 3"""
-    response = db.run(query)
-    return response
-
-
-def store_merchant_memory(email: str, merchant_query: str, ai_response: str):
-    """Store user interactions in MySQL memory."""
-    query = f"""INSERT INTO merchant_memory (email, merchant_query, ai_response) VALUES ('{email}', '{merchant_query.strip()}', '{ai_response}')"""
-    db.run(query)
 
 
 def query_db_for_merchant(email: str, query: str):
@@ -68,29 +56,30 @@ def query_db_for_merchant(email: str, query: str):
         tools = toolkit.get_tools()
 
         # Retrieve memory context
-        past_interactions = get_merchant_memory(email) or "[]"
+        past_interactions = get_memory(db=db, email=email) or "[]"
         past_interactions = ast.literal_eval(past_interactions)
 
         # Check if past_interactions has any data
         if past_interactions:
-            memory_context = "\n".join([f"user: {q}\nai_response: {r}" for q, r in past_interactions])
+            memory_context = "\n".join(
+                [f"user: {q}\nai_response: {r}" for q, r in past_interactions]
+            )
         else:
             memory_context = ""  # Empty memory context if no past interactions
 
-
         prompt_template = f"""You are an intelligent agent designed to interact with a SQL database for a restaurant chatbot.
-        Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information.
-        
-        Guidelines:
-        Always limit queries to at most {{top_k}} results unless the user specifies otherwise.
-        Order results by relevance, such as popularity, price, or reservation time.
-        Only query for necessary columns—never use SELECT *.
-        Always check the database schema for the most relevant tables before constructing your query.
-        If a query fails, refine it and try again.
-        Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
-        If you don't know the answer. Strictly respond with "I don't know".
-        
-        Ensure the generated query is precise, efficient, and safe to execute."""
+Given an chat history: {memory_context} and input question: {query}, generate a syntactically correct {{dialect}} query to retrieve the relevant information.
+
+Guidelines:
+Always limit queries to at most {{top_k}} results unless the user specifies otherwise.
+Order results by relevance, such as popularity, price, or reservation time.
+Only query for necessary columns—never use SELECT *.
+Always check the database schema for the most relevant tables before constructing your query.
+If a query fails, refine it and try again.
+Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
+If you don't know the answer. Strictly respond with "I don't know".
+
+Ensure the generated query is precise, efficient, and safe to execute."""
         system_message = prompt_template.format(dialect="mysql", top_k=5)
         agent_executor = create_react_agent(llm, tools, prompt=system_message)
 
@@ -109,8 +98,16 @@ def query_db_for_merchant(email: str, query: str):
             for old, new in replacements.items():
                 final_answer = final_answer.replace(old, new)
 
-
-        if any(phrase in final_answer for phrase in ["I cannot retrieve", "not enough information", "I don''t have", "I don''t know.", "I don''t know"]):
+        if any(
+            phrase in final_answer
+            for phrase in [
+                "I cannot retrieve",
+                "not enough information",
+                "I don''t have",
+                "I don''t know.",
+                "I don''t know",
+            ]
+        ):
             tavily_response = tavily_search(email=email, input=query)
 
             replacements = {
@@ -123,19 +120,18 @@ def query_db_for_merchant(email: str, query: str):
                 tavily_response = tavily_response.replace(old, new)
 
             # Store the external response in memory instead of "I don't know"
-            store_merchant_memory(email, query, tavily_response)
+            store_memory(email, query, tavily_response)
             return {"ai_response": tavily_response}
-        
+
         # Store the valid AI-generated response in memory
-        store_merchant_memory(email, query, final_answer)   
+        store_memory(email, query, final_answer)
 
         return {"ai_response": final_answer}
 
     else:
         return {
-                "ai_response": (
-                    "Email authentication failed. Authentication is required to book a table or place an order."
-                    "However, you are welcome to ask general inquiries."
-                )
-            }
-
+            "ai_response": (
+                "Email authentication failed. Authentication is required to book a table or place an order."
+                "However, you are welcome to ask general inquiries."
+            )
+        }

@@ -7,6 +7,7 @@ from user_backend import book_table, query_db_for_user
 
 # Load environment variables
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Initialize FastAPI app
@@ -17,6 +18,7 @@ app = FastAPI()
 # Merchant Query API
 # ----------------------------------------------------------------
 
+
 # Request model for merchant query
 class MerchantQueryRequest(BaseModel):
     email: str
@@ -26,7 +28,6 @@ class MerchantQueryRequest(BaseModel):
 # Response model for merchant query
 class MerchantQueryResponse(BaseModel):
     ai_response: str
-
 
 
 @app.post("/merchant/chat", response_model=MerchantQueryResponse)
@@ -52,10 +53,10 @@ async def merchant_query(request: MerchantQueryRequest):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
-
 # ----------------------------------------------------------------
 # User Query API
 # ----------------------------------------------------------------
+
 
 # Request model for user query
 class UserQueryRequest(BaseModel):
@@ -83,6 +84,7 @@ async def user_query(request: UserQueryRequest):
 # User Bookings API
 # ----------------------------------------------------------------
 
+
 # Request model for table booking
 class BookTableRequest(BaseModel):
     name: str
@@ -92,7 +94,6 @@ class BookTableRequest(BaseModel):
     time: str
     guests: str
     message: str
-    booking_type: str
 
 
 # Response model for table booking
@@ -105,7 +106,6 @@ class BookTableResponse(BaseModel):
     time: str
     guests: str
     message: str
-    booking_type: str
 
 
 @app.post("/user/book_table", response_model=BookTableResponse)
@@ -124,7 +124,6 @@ async def user_booking(request: BookTableRequest):
             time=request.time,
             guests=request.guests,
             message=request.message,
-            booking_type=request.booking_type,
             created_at=created_at,
             updated_at=updated_at,
         )
@@ -133,4 +132,3 @@ async def user_booking(request: BookTableRequest):
         raise http_exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-    
