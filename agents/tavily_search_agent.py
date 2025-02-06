@@ -12,11 +12,9 @@ from langchain.agents import (
     AgentExecutor,
 )
 from langchain import hub
-
-from dotenv import load_dotenv
-
 from utils import get_merchant_memory, get_user_memory, initialize_db
 
+from dotenv import load_dotenv
 load_dotenv()
 
 
