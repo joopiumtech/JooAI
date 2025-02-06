@@ -1,5 +1,4 @@
-import os
-from datetime import date, datetime, time
+from datetime import date, datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from merchant_backend import query_db_for_merchant
@@ -21,6 +20,7 @@ app = FastAPI()
 
 # Request model for merchant query
 class MerchantQueryRequest(BaseModel):
+    db_name: str
     email: str
     query: str
 
@@ -30,7 +30,7 @@ class MerchantQueryResponse(BaseModel):
     ai_response: str
 
 
-@app.post("/merchant/chat", response_model=MerchantQueryResponse)
+@app.post("/chat", response_model=MerchantQueryResponse)
 async def merchant_query(request: MerchantQueryRequest):
     """
     FastAPI endpoint to handle merchant queries.
@@ -45,7 +45,7 @@ async def merchant_query(request: MerchantQueryRequest):
         HTTPException: If an error occurs during query processing.
     """
     try:
-        result = query_db_for_merchant(email=request.email, query=request.query)
+        result = query_db_for_merchant(db_name=request.db_name, email=request.email, query=request.query)
         return result
     except HTTPException as http_exc:
         raise http_exc
@@ -57,9 +57,9 @@ async def merchant_query(request: MerchantQueryRequest):
 # User Query API
 # ----------------------------------------------------------------
 
-
 # Request model for user query
 class UserQueryRequest(BaseModel):
+    db_name: str
     email: str
     query: str
 
@@ -72,7 +72,7 @@ class UserQueryResponse(BaseModel):
 @app.post("/user/chat", response_model=UserQueryResponse)
 async def user_query(request: UserQueryRequest):
     try:
-        result = query_db_for_user(email=request.email, query=request.query)
+        result = query_db_for_user(db_name=request.db_name, email=request.email, query=request.query)
         return result
     except HTTPException as http_exc:
         raise http_exc
@@ -87,6 +87,7 @@ async def user_query(request: UserQueryRequest):
 
 # Request model for table booking
 class BookTableRequest(BaseModel):
+    db_name: str
     name: str
     phone: str
     email: str
@@ -99,13 +100,6 @@ class BookTableRequest(BaseModel):
 # Response model for table booking
 class BookTableResponse(BaseModel):
     ai_response: str
-    name: str
-    phone: str
-    email: str
-    date: date
-    time: str
-    guests: str
-    message: str
 
 
 @app.post("/user/book_table", response_model=BookTableResponse)
@@ -117,6 +111,7 @@ async def user_booking(request: BookTableRequest):
 
         # Call the helper function
         result = book_table(
+            db_name=request.db_name,
             name=request.name,
             phone=request.phone,
             email=request.email,

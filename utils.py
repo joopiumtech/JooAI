@@ -14,7 +14,6 @@ def initialize_db(db_name):
     db_user = os.environ.get("DB_USER")
     db_host = os.environ.get("DB_HOST")
     db_pass = os.environ.get("DB_PASS")
-
     # Construct database URI and initialize connection
     database_uri = f"mysql+mysqlconnector://{db_user}:{db_pass}@{db_host}/{db_name}"
     db = SQLDatabase.from_uri(database_uri)
@@ -44,16 +43,32 @@ def convert_to_24hr(time_str: str) -> str:
     raise ValueError("Invalid time format. Please use 'am' or 'pm'.")
 
 
-def get_memory(db, email: str):
+# User Memory
+def get_user_memory(db: str, email: str):
     """Retrieve the last few interactions from MySQL memory."""
     query = f"""SELECT user_query, ai_response FROM user_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 3"""
     response = db.run(query)
     return response
 
 
-def store_memory(db, email: str, user_query: str, ai_response: str):
+def store_user_memory(db: str, email: str, user_query: str, ai_response: str):
     """Store user interactions in MySQL memory."""
     query = f"""INSERT INTO user_memory (email, user_query, ai_response) VALUES ('{email}', '{user_query.strip()}', '{ai_response}')"""
+    db.run(query)
+
+
+
+# Merchant Memory
+def get_merchant_memory(db: str, email: str):
+    """Retrieve the last few interactions from MySQL memory."""
+    query = f"""SELECT merchant_query, ai_response FROM merchant_memory WHERE email = '{email}' ORDER BY timestamp DESC LIMIT 3"""
+    response = db.run(query)
+    return response
+
+
+def store_merchant_memory(db: str, email: str, merchant_query: str, ai_response: str):
+    """Store user interactions in MySQL memory."""
+    query = f"""INSERT INTO merchant_memory (email, merchant_query, ai_response) VALUES ('{email}', '{merchant_query.strip()}', '{ai_response}')"""
     db.run(query)
 
 
@@ -62,3 +77,5 @@ def fetch_restaurant_name(db):
     response = db.run(sql_query)
     modified_res = ast.literal_eval(response)
     return modified_res[0]
+
+
