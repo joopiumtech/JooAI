@@ -19,9 +19,10 @@ load_dotenv()
 
 
 
-def tavily_search(db_name: str, email: str, input: str):
+def tavily_search(input: str):
     # Initialize database
-    db = initialize_db(db_name=db_name)
+    db = initialize_db()
+    email = os.environ.get("ADMIN_EMAIL")
 
     # Initialize LLM model
     llm = ChatOpenAI(
@@ -33,7 +34,7 @@ def tavily_search(db_name: str, email: str, input: str):
     
 
     # Retrieve merchant memory context
-    chat_history = get_merchant_memory(db=db, email=email) or "[]"
+    chat_history = get_merchant_memory(email=email) or "[]"
     chat_history = ast.literal_eval(chat_history)
     
     # Check if chat_history has any data

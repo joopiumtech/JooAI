@@ -1,12 +1,10 @@
 import ast
 import os
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.tavily_search_agent import tavily_search
 from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain import hub
 from langchain_openai import ChatOpenAI
 
 # Load environment variables
@@ -15,12 +13,6 @@ load_dotenv()
 
 
 # Initialize the LLM model
-# llm = ChatGoogleGenerativeAI(
-#     model="gemini-1.5-pro",
-#     temperature=0,  # Keep temperature low for accuracy
-#     max_retries=1,  # Increase retries for robustness
-#     api_key=os.getenv("GEMINI_API_KEY"),
-# )
 
 
 llm = ChatOpenAI(
@@ -32,7 +24,7 @@ llm = ChatOpenAI(
 )
 
 
-def query_db_for_merchant(db_name: str, email: str, query: str):
+def query_db_for_merchant(query: str):
     """
     Authenticates a merchant by email and processes their query to the database using an LLM-powered agent.
 
@@ -45,49 +37,80 @@ def query_db_for_merchant(db_name: str, email: str, query: str):
     """
     try:
         # Initialize database
-        db = initialize_db(db_name=db_name)
+        db = initialize_db()
+        email = os.environ.get("ADMIN_EMAIL")
 
-        auth_query = f"SELECT * FROM `users` WHERE email = '{email}';"
-        is_user_exists = db.run(auth_query)
 
-        if is_user_exists:
-            """Creates and returns an agent executor configured for the database."""
-            toolkit = SQLDatabaseToolkit(db=db, llm=llm)
-            tools = toolkit.get_tools()
-            
-            # Retrieve memory context
-            chat_history = get_merchant_memory(db=db, email=email) or "[]"
-            chat_history = ast.literal_eval(chat_history)
+        """Creates and returns an agent executor configured for the database."""
+        toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+        tools = toolkit.get_tools()
+        
+        # Retrieve memory context
+        chat_history = get_merchant_memory(email=email) or "[]"
+        chat_history = ast.literal_eval(chat_history)
 
-            # Check if chat_history has any data
-            if chat_history:
-                memory_context = "\n".join(
-                    [f"user: {q}\nai_response: {r}" for q, r in chat_history]
-                )
-            else:
-                memory_context = ""  # Empty memory context if no past interactions
+        # Check if chat_history has any data
+        if chat_history:
+            memory_context = "\n".join(
+                [f"user: {q}\nai_response: {r}" for q, r in chat_history]
+            )
+        else:
+            memory_context = ""  # Empty memory context if no past interactions
 
-            # HYPERPARAMETERS
-            RESTAURANT_NAME = fetch_restaurant_name(db=db)
-            prompt_template = f"""Restaurnat Name: {RESTAURANT_NAME}
-You are an intelligent agent designed to interact with a SQL database for a restaurant merchant chatbot.
-Given an chat history:\n{memory_context}\nand input question: {query}.\ngenerate a syntactically correct {{dialect}} query to retrieve the relevant information.
+        # HYPERPARAMETERS
+        RESTAURANT_NAME = fetch_restaurant_name()
+        prompt_template = f"""Restaurnat Name: {RESTAURANT_NAME}
+        You are an AI assistant designed to interact with {RESTAURANT_NAME}'s SQL database to answer queries related to the restaurant's operations, based on the chat history: {memory_context} and input question: {query}.
 
-Guidelines:
-Always limit queries to at most {{top_k}} results unless the merchant specifies otherwise.
-Order results by relevance, such as popularity, price, or reservation time.
-Only query for necessary columns—never use SELECT *.
-Always check the database schema for the most relevant tables before constructing your query.
-If a query fails, refine it and try again.
-Never execute DML statements (INSERT, UPDATE, DELETE, DROP, etc.).
-If you don't know the answer. Strictly repond with "I don't know".
+        Guidelines for Query Execution:
+        Understanding the Database:
+        - Before generating any query, first retrieve and examine the available tables to understand what data can be accessed.
+        - Identify the most relevant tables and check their schema before constructing your query.
 
-Ensure the generated query is precise, efficient, and safe to execute."""
-            system_message = prompt_template.format(dialect="mysql", top_k=5)
-            agent_executor = create_react_agent(llm, tools, prompt=system_message)
+        Constructing SQL Queries:
+        - Generate only syntactically correct {{dialect}} queries.
+        - Focus only on relevant columns instead of selecting all columns from a table.
+        - Unless the user specifies a particular number of results, limit queries to {{top_k}} results for efficiency.
+        - When applicable, order results by a relevant column to provide the most insightful answers.
 
-            response = agent_executor.invoke({"messages": [{"role": "user", "content": query}]})
-            final_answer = response["messages"][-1].content.strip()
+        Execution & Error Handling:
+        - Always double-check your query before execution.
+        - If an error occurs, refine the query and retry instead of returning incorrect results.
+        - For queries related to bookings, retrieve only the most up-to-date information from the bookings table. If no data is available, respond strictly with: "Currently, there are no booking records available." 
+        - If you can answer it directly, do so.
+        - If you don't know the answer, strictly respond with "I don't know". Don't try to create an answer from the data.
+
+        Restrictions:
+        - Do NOT execute any DML (INSERT, UPDATE, DELETE, DROP, etc.) operations—your role is strictly read-only.
+        - Only use the tools provided to interact with the database and rely solely on the returned data to construct responses.
+        
+        Your goal is to provide accurate, concise, and insightful answers based on the restaurant's data."""
+        
+        system_message = prompt_template.format(dialect="mysql", top_k=5)
+        agent_executor = create_react_agent(llm, tools, prompt=system_message)
+
+        response = agent_executor.invoke({"messages": [{"role": "user", "content": query}]})
+        final_answer = response["messages"][-1].content.strip()
+
+        replacements = {
+            "'": "''",
+            '"': '""',
+            "\\": "\\\\",
+        }
+
+        for old, new in replacements.items():
+            final_answer = final_answer.replace(old, new)
+        
+        if any(
+            phrase in final_answer
+            for phrase in [
+                "I cannot retrieve",
+                "I don''t have",
+                "I don''t know.",
+                "I don''t know",
+            ]
+        ):
+            tavily_response = tavily_search(input=query)
 
             replacements = {
                 "'": "''",
@@ -96,45 +119,17 @@ Ensure the generated query is precise, efficient, and safe to execute."""
             }
 
             for old, new in replacements.items():
-                final_answer = final_answer.replace(old, new)
-            
-            if any(
-                phrase in final_answer
-                for phrase in [
-                    "I cannot retrieve",
-                    "I don''t have",
-                    "I don''t know.",
-                    "I don''t know",
-                ]
-            ):
-                tavily_response = tavily_search(db_name=db_name, email=email, input=query)
+                tavily_response = tavily_response.replace(old, new)
 
-                replacements = {
-                    "'": "''",
-                    '"': '""',
-                    "\\": "\\\\",
-                }
+            # Store the external response in memory instead of "I don't know"
+            store_merchant_memory(email=email, merchant_query=query, ai_response=tavily_response)
+            return {"ai_response": tavily_response}
 
-                for old, new in replacements.items():
-                    tavily_response = tavily_response.replace(old, new)
+        # Store the valid AI-generated response in memory
+        store_merchant_memory(email=email, merchant_query=query, ai_response=final_answer)
 
-                # Store the external response in memory instead of "I don't know"
-                store_merchant_memory(
-                    db=db, email=email, merchant_query=query, ai_response=tavily_response
-                )
-                return {"ai_response": tavily_response}
-
-            # Store the valid AI-generated response in memory
-            store_merchant_memory(db=db, email=email, merchant_query=query, ai_response=final_answer)
-
-            return {"ai_response": final_answer}
-        else:
-            return {
-                "ai_response": (
-                    "Email authentication failed. Authentication is required to book a table or place an order."
-                    "However, you are welcome to ask general inquiries."
-                )
-            }
+        return {"ai_response": final_answer}
+       
     except Exception as error:
         return {
             "ai_response": f"There is an error occured.\nError: {error}"

@@ -17,7 +17,6 @@ from langchain_community.agent_toolkits import SQLDatabaseToolkit
 
 
 from dotenv import load_dotenv
-
 load_dotenv()
 
 # Initialize LLM model
