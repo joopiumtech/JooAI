@@ -70,7 +70,7 @@ def get_merchant_memory(email: str):
 def store_merchant_memory(email: str, merchant_query: str, ai_response: str):
     db = initialize_db()
     """Store user interactions in MySQL memory."""
-    query = f"""INSERT INTO merchant_memory (email, merchant_query, ai_response) VALUES ('{email}', '{merchant_query.strip()}', '{ai_response}')"""
+    query = f"""INSERT INTO merchant_memory (email, merchant_query, ai_response) VALUES ('{email}', '{merchant_query.strip()}', '{ai_response.strip()}')"""
     db.run(query)
 
 
