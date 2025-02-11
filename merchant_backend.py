@@ -29,7 +29,6 @@ def query_db_for_merchant(query: str):
     Authenticates a merchant by email and processes their query to the database using an LLM-powered agent.
 
     Args:
-        email (str): User's email address for authentication.
         query (str): User's query to be executed on the database.
 
     Returns:
