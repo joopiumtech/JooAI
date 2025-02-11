@@ -20,8 +20,6 @@ app = FastAPI()
 
 # Request model for merchant query
 class MerchantQueryRequest(BaseModel):
-    db_name: str
-    email: str
     query: str
 
 
@@ -45,7 +43,7 @@ async def merchant_query(request: MerchantQueryRequest):
         HTTPException: If an error occurs during query processing.
     """
     try:
-        result = query_db_for_merchant(db_name=request.db_name, email=request.email, query=request.query)
+        result = query_db_for_merchant(query=request.query)
         return result
     except HTTPException as http_exc:
         raise http_exc
