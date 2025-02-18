@@ -12,7 +12,7 @@ def initialize_db():
     # Initialize database connection with environment variables
     db_user = os.environ.get("DB_USER")
     db_host = os.environ.get("DB_HOST")
-    db_pass = "JoopiumTech"
+    db_pass = os.environ.get("DB_PASS")
     db_name = os.environ.get("DB_NAME")
     # Construct database URI and initialize connection
     database_uri = f"mysql+mysqlconnector://{db_user}:{db_pass}@{db_host}/{db_name}"

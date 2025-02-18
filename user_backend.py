@@ -17,7 +17,7 @@ from langchain_community.agent_toolkits import SQLDatabaseToolkit
 
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 # Initialize LLM model
 # llm = ChatGoogleGenerativeAI(
