@@ -15,6 +15,8 @@ app = FastAPI()
 # Merchant Query API
 # ----------------------------------------------------------------
 
+
+# Authentication API
 class MerchantAuthRequest(BaseModel):
     email: str
     password: str
@@ -38,14 +40,11 @@ async def merchant_auth(request: MerchantAuthRequest):
         raise HTTPException(status_code=401, detail=f"Unexpected error: {str(e)}")
 
 
-
-
-# Request model for merchant query
+# Chat API
 class MerchantQueryRequest(BaseModel):
     query: str
 
 
-# Response model for merchant query
 class MerchantQueryResponse(BaseModel):
     ai_response: str
 
