@@ -1,7 +1,9 @@
+import os
+
 from datetime import date, datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from merchant_backend import query_db_for_merchant
+from merchant_backend import get_current_user, query_db_for_merchant, auth_test
 from user_backend import book_table, query_db_for_user
 
 # Load environment variables
@@ -13,9 +15,36 @@ load_dotenv()
 app = FastAPI()
 
 
+
+
+
 # ----------------------------------------------------------------
 # Merchant Query API
 # ----------------------------------------------------------------
+
+class MerchantAuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+class MerchantAuthResponse(BaseModel):
+    is_authenticated: bool
+    auth_message: str
+    access_token: str = None  # Include token in the response
+
+
+@app.post("/auth", response_model=MerchantAuthResponse)
+async def merchant_auth(request: MerchantAuthRequest):
+    """
+    FastAPI endpoint for merchant authentication.
+    """
+    try:
+        result = auth_test(email=request.email, password=request.password)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Unexpected error: {str(e)}")
+
+
 
 
 # Request model for merchant query
@@ -29,26 +58,21 @@ class MerchantQueryResponse(BaseModel):
 
 
 @app.post("/chat", response_model=MerchantQueryResponse)
-async def merchant_query(request: MerchantQueryRequest):
+async def merchant_query(
+    request: MerchantQueryRequest,
+    current_user: str = Depends(get_current_user),  # Require authentication
+):
     """
     FastAPI endpoint to handle merchant queries.
-
-    Args:
-        request (MerchantQueryRequest): The request body containing the merchant query.
-
-    Returns:
-        MerchantQueryResponse: The response containing the query and AI-generated response.
-
-    Raises:
-        HTTPException: If an error occurs during query processing.
+    Only authenticated users can access.
     """
     try:
         result = query_db_for_merchant(query=request.query)
         return result
-    except HTTPException as http_exc:
-        raise http_exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
 
 
 # ----------------------------------------------------------------

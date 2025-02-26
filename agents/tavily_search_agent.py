@@ -60,7 +60,7 @@ def tavily_search(input: str):
     react_prompt = hub.pull("hwchase17/react")
     agent = create_react_agent(llm=llm, tools=tools_for_agent, prompt=react_prompt)
     agent_executor = AgentExecutor(
-        agent=agent, tools=tools_for_agent, verbose=True, handle_parsing_errors=True
+        agent=agent, tools=tools_for_agent, handle_parsing_errors=True
     )
 
     result = agent_executor.invoke(

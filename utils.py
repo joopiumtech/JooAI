@@ -1,6 +1,8 @@
 import ast
 import os
 import re
+import bcrypt
+
 
 from langchain_community.utilities import SQLDatabase
 
@@ -82,4 +84,7 @@ def fetch_restaurant_name():
     modified_res = ast.literal_eval(response)
     return modified_res[0]
 
+
+def verify_password(plain_password, hashed_password):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
