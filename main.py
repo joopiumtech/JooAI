@@ -1,21 +1,15 @@
-import os
-
-from datetime import date, datetime
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from merchant_backend import get_current_user, query_db_for_merchant, auth_test
 
+
 # Load environment variables
 from dotenv import load_dotenv
-
 load_dotenv()
+
 
 # Initialize FastAPI app
 app = FastAPI()
-
-
-
-
 
 # ----------------------------------------------------------------
 # Merchant Query API

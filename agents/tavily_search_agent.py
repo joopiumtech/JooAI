@@ -1,8 +1,7 @@
-import ast
 import os
+import ast
 
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
@@ -12,7 +11,7 @@ from langchain.agents import (
     AgentExecutor,
 )
 from langchain import hub
-from utils import get_merchant_memory, get_user_memory, initialize_db
+from utils import get_merchant_memory, initialize_db
 
 from dotenv import load_dotenv
 load_dotenv()

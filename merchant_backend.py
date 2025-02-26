@@ -1,6 +1,5 @@
-import ast
 import os
-import bcrypt
+import ast
 
 from agents.tavily_search_agent import tavily_search
 from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory, verify_password
@@ -11,7 +10,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, status
 
 # Load environment variables
 from dotenv import load_dotenv
