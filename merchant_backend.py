@@ -5,12 +5,14 @@ from agents.tavily_search_agent import tavily_search
 from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory, verify_password
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
+from pinecone import Pinecone, ServerlessSpec
+from langchain_pinecone import PineconeVectorStore
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -102,7 +104,41 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
 
+
+def get_business_reference_data(query: str):
+    # Initialize pinecone
+    pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+    pc = Pinecone(api_key=pinecone_api_key)
+    index_name = os.environ.get("INDEX_NAME")
+    existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
+
+    if index_name not in existing_indexes:
+        pc.create_index(
+            name=index_name,
+            dimension=3072,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region=os.environ.get("PINECONE_ENVIRONMENT")),
+        )
+
+    index = pc.Index(index_name)
+
+    # Initialize embedding model
+    embedding_model = OpenAIEmbeddings(
+        model="text-embedding-3-large",
+        api_key=os.environ.get('OPENAI_API_KEY')
+    )
+
+    vector_store = PineconeVectorStore(index=index, embedding=embedding_model)
+
+    results = vector_store.similarity_search(
+        query,
+        k=5,
+        namespace="marketing_plan"
+    )
+    for res in results:
+        return res.page_content
 
 
 def query_db_for_merchant(query: str):
@@ -146,13 +182,15 @@ def query_db_for_merchant(query: str):
         Understanding the Database:
         - Before generating any query, first retrieve and examine the available tables to understand what data can be accessed.
         - Identify the most relevant tables and check their schema before constructing your query.
+        - If query is related to business development. Use {get_business_reference_data(query)} for your reference.
+        - Always represent monetary values in British pounds (£). If a value is given in another currency, convert it to pounds (£) using the most recent exchange rate. Clearly indicate the conversion when applicable. Never use dollars ($) or any other currency unless explicitly requested.
 
         Constructing SQL Queries:
         - Generate only syntactically correct {{dialect}} queries.
         - Focus only on relevant columns instead of selecting all columns from a table.
         - Unless the user specifies a particular number of results, limit queries to {{top_k}} results for efficiency.
         - When applicable, order results by a relevant column to provide the most insightful answers.
-
+        
         Execution & Error Handling:
         - Always double-check your query before execution.
         - If an error occurs, refine the query and retry instead of returning incorrect results.
@@ -214,5 +252,3 @@ def query_db_for_merchant(query: str):
         return {
             "ai_response": f"There is an error occured.\nError: {error}"
         }
-
-
