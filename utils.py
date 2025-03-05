@@ -57,7 +57,7 @@ def insert_data_to_redis(email: str, query: str, ai_response: str):
     r = initialize_redis()
     key = f"{email}_memory"
 
-    new_data = {"email": email, "query": query, "ai_response": ai_response}
+    new_data = {"query": query, "ai_response": ai_response}
 
     # Push new JSON object to Redis list
     r.rpush(key, json.dumps(new_data))
