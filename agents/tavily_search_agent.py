@@ -11,7 +11,7 @@ from langchain.agents import (
     AgentExecutor,
 )
 from langchain import hub
-from utils import get_merchant_memory, initialize_db, retrieve_data_from_redis
+from utils import initialize_db, retrieve_data_from_redis
 
 from dotenv import load_dotenv
 load_dotenv()

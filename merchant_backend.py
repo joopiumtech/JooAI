@@ -2,7 +2,7 @@ import os
 import ast
 
 from agents.tavily_search_agent import tavily_search
-from utils import fetch_restaurant_name, initialize_db, insert_data_to_redis, retrieve_data_from_redis, store_merchant_memory, get_merchant_memory, verify_password
+from utils import fetch_restaurant_name, initialize_db, insert_data_to_redis, retrieve_data_from_redis, verify_password
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
