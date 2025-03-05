@@ -12,3 +12,4 @@ python-jose
 passlib
 pinecone
 langchain_pinecone
+redis

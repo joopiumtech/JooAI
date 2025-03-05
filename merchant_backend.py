@@ -2,7 +2,7 @@ import os
 import ast
 
 from agents.tavily_search_agent import tavily_search
-from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory, verify_password
+from utils import fetch_restaurant_name, initialize_db, insert_data_to_redis, retrieve_data_from_redis, store_merchant_memory, get_merchant_memory, verify_password
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -162,19 +162,21 @@ def query_db_for_merchant(query: str):
         tools = toolkit.get_tools()
         
         # Retrieve memory context
-        chat_history = get_merchant_memory(email=email) or "[]"
-        chat_history = ast.literal_eval(chat_history)
+        chat_history = retrieve_data_from_redis(email=email)
 
         # Check if chat_history has any data
         if chat_history:
-            memory_context = "\n".join(
-                [f"user: {q}\nai_response: {r}" for q, r in chat_history]
-            )
+            memory_context = ""
+            for entry in chat_history:
+                memory_context += f"user_query: {entry['query']}\n"
+                memory_context += f"ai_response: {entry['ai_response']}\n\n"
         else:
             memory_context = ""  # Empty memory context if no past interactions
 
-        # HYPERPARAMETERS
+
         RESTAURANT_NAME = fetch_restaurant_name()
+        reference_data = get_business_reference_data(query=query)
+
         prompt_template = f"""Restaurnat Name: {RESTAURANT_NAME}
         You are an AI assistant designed to interact with {RESTAURANT_NAME}'s SQL database to answer queries related to the restaurant's operations, based on the chat history: {memory_context} and input question: {query}.
 
@@ -182,7 +184,7 @@ def query_db_for_merchant(query: str):
         Understanding the Database:
         - Before generating any query, first retrieve and examine the available tables to understand what data can be accessed.
         - Identify the most relevant tables and check their schema before constructing your query.
-        - If query is related to business development. Use {get_business_reference_data(query)} for your reference.
+        - If query is related to business development. Use {reference_data} for your reference.
         - Always represent monetary values in British pounds (£). If a value is given in another currency, convert it to pounds (£) using the most recent exchange rate. Clearly indicate the conversion when applicable. Never use dollars ($) or any other currency unless explicitly requested.
 
         Constructing SQL Queries:
@@ -240,11 +242,11 @@ def query_db_for_merchant(query: str):
                 tavily_response = tavily_response.replace(old, new)
 
             # Store the external response in memory instead of "I don't know"
-            store_merchant_memory(email=email, merchant_query=query, ai_response=tavily_response)
+            insert_data_to_redis(email=email, query=query, ai_response=tavily_response)
             return {"ai_response": tavily_response}
 
         # Store the valid AI-generated response in memory
-        store_merchant_memory(email=email, merchant_query=query, ai_response=final_answer)
+        insert_data_to_redis(email=email, query=query, ai_response=final_answer)
 
         return {"ai_response": final_answer}
        
