@@ -79,7 +79,7 @@ def fetch_restaurant_name():
     sql_query = f"""SELECT bannertitle FROM homepages"""
     response = db.run(sql_query)
     modified_res = ast.literal_eval(response)
-    return modified_res[0]
+    return modified_res[0][0]
 
 
 def verify_password(plain_password, hashed_password):
