@@ -1,6 +1,7 @@
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from merchant_backend import get_current_user, query_db_for_merchant, auth_test
+from auth import auth_test, get_current_user
+from merchant_backend import query_db_for_merchant
 
 
 # Load environment variables
@@ -12,7 +13,7 @@ load_dotenv()
 app = FastAPI()
 
 # ----------------------------------------------------------------
-# Merchant Query API
+# Merchant APIs
 # ----------------------------------------------------------------
 
 
@@ -43,6 +44,7 @@ async def merchant_auth(request: MerchantAuthRequest):
 # Chat API
 class MerchantQueryRequest(BaseModel):
     query: str
+    audio_query: bool
 
 
 class MerchantQueryResponse(BaseModel):
@@ -59,7 +61,7 @@ async def merchant_query(
     Only authenticated users can access.
     """
     try:
-        result = query_db_for_merchant(query=request.query)
+        result = query_db_for_merchant(query=request.query, audio_query=request.audio_query)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
