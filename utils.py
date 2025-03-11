@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 
+# ----------------------------------------------------------------------------
+# DB Utils
+# ----------------------------------------------------------------------------
+
 def initialize_db():
     # Initialize database connection with environment variables
     db_user = os.environ.get("DB_USER")
@@ -22,6 +26,15 @@ def initialize_db():
 
     return db
 
+
+def verify_password(plain_password, hashed_password):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+
+
+# ----------------------------------------------------------------------------
+# Memory Utils
+# ----------------------------------------------------------------------------
 
 # DB Memory Setup
 # def get_merchant_memory(email: str):
@@ -39,8 +52,6 @@ def initialize_db():
 #     db.run(query)
 
 
-
-# Redis Memory Setup
 def initialize_redis():
     # Connect to Redis (default: localhost:6379)
     r = redis.Redis(
@@ -71,16 +82,3 @@ def retrieve_data_from_redis(email: str):
     # Retrieve all elements in the list
     return [json.loads(item) for item in r.lrange(key, 0, -1)]
 
-
-
-def fetch_restaurant_name():
-    db = initialize_db()
-
-    sql_query = f"""SELECT bannertitle FROM homepages"""
-    response = db.run(sql_query)
-    modified_res = ast.literal_eval(response)
-    return modified_res[0][0]
-
-
-def verify_password(plain_password, hashed_password):
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))

@@ -11,7 +11,7 @@ from langchain.agents import (
     AgentExecutor,
 )
 from langchain import hub
-from utils import initialize_db, retrieve_data_from_redis
+from utils import retrieve_data_from_redis
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -19,8 +19,6 @@ load_dotenv()
 
 
 def tavily_search(input: str):
-    # Initialize database
-    db = initialize_db()
     email = os.environ.get("ADMIN_EMAIL")
 
     # Initialize LLM model

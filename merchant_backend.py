@@ -1,14 +1,13 @@
 import os
-import ast
+import threading
+import wave
+import numpy as np
 import openai
 import sounddevice as sd
-import numpy as np
-import wave
-# import pygame
 
 
 from agents.tavily_search_agent import tavily_search
-from utils import fetch_restaurant_name, initialize_db, insert_data_to_redis, retrieve_data_from_redis, verify_password
+from utils import initialize_db, insert_data_to_redis, retrieve_data_from_redis
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -29,7 +28,38 @@ llm = ChatOpenAI(
     streaming=True
 )
 
-    
+
+
+# Shared event for controlling recording
+recording_event = threading.Event()
+samplerate = 16000
+filename = "input_audio/input.wav"
+
+
+def record_audio():
+    """ Continuously records audio until stopped using an event flag. """
+    recording_event.set()  # Start recording
+
+    with wave.open(filename, "wb") as f:
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(samplerate)
+
+        while recording_event.is_set():
+            chunk = sd.rec(int(samplerate * 1), samplerate=samplerate, channels=1, dtype=np.int16)
+            sd.wait()
+            f.writeframes(chunk.tobytes())
+
+
+def speech_to_text(filename: str):
+    with open(filename, "rb") as audio_file:
+        response = openai.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file
+        )
+    return response.text
+
+
 
 def get_business_reference_data(query: str):
     # Initialize pinecone
@@ -63,48 +93,7 @@ def get_business_reference_data(query: str):
     )
     for res in results:
         return res.page_content
-
-
-# Record user voice input
-def record_audio(filename="input_audio/input.wav", duration=5, samplerate=16000):
-    audio_data = sd.rec(int(samplerate * duration), samplerate=samplerate, channels=1, dtype=np.int16)
-    sd.wait()
     
-    # Save the recording
-    with wave.open(filename, "wb") as f:
-        f.setnchannels(1)
-        f.setsampwidth(2)
-        f.setframerate(samplerate)
-        f.writeframes(audio_data.tobytes())
-
-
-# Convert voice to text
-def speech_to_text(filename="input_audio/input.wav"):
-    with open(filename, "rb") as audio_file:
-        response = openai.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
-        )
-    return response.text
-
-
-# def text_to_speech(text, filename="response.mp3"):
-#     """
-#     Converts text to speech using OpenAI TTS and plays it.
-#     """
-#     response = openai.audio.speech.create(
-#         model="tts-1",
-#         voice="alloy",  # Available voices: alloy, echo, fable, onyx, nova, shimmer
-#         input=text
-#     )
-#     with open(filename, "wb") as f:
-#         f.write(response.content)
-
-#     pygame.mixer.init()
-#     pygame.mixer.music.load(filename)
-#     pygame.mixer.music.play()
-#     while pygame.mixer.music.get_busy():
-#         continue
 
 
 def query_db_for_merchant(query: str = None, audio_query: bool = False):
@@ -120,8 +109,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     """
     try:
         if audio_query:
-            record_audio()
-            query = speech_to_text()
+            query = speech_to_text(filename="input_audio/input.wav")
         
         if not query:
             return {"ai_response": "No query provided."}
@@ -142,7 +130,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
             [f"user_query: {entry['query']}\nai_response: {entry['ai_response']}\n" for entry in chat_history]
         ) if chat_history else ""
 
-        RESTAURANT_NAME = fetch_restaurant_name()
+        RESTAURANT_NAME = os.environ.get("RESTAURANT_NAME")
         reference_data = get_business_reference_data(query=query)
 
         prompt_template = f"""Restaurnat Name: {RESTAURANT_NAME}
@@ -198,8 +186,9 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
             response_text = final_answer
 
         # Convert response to speech and return
-        # text_to_speech(response_text)
         return {"ai_response": response_text}
 
     except Exception as error:
         return {"ai_response": f"An error occurred.\nError: {error}"}
+
+

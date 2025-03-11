@@ -14,4 +14,3 @@ pinecone
 langchain_pinecone
 redis
 sounddevice
-pygame
