@@ -27,6 +27,15 @@ def initialize_db():
     return db
 
 
+def fetch_restaurant_name():
+    db = initialize_db()
+
+    sql_query = f"""SELECT name FROM settings"""
+    response = db.run(sql_query)
+    modified_res = ast.literal_eval(response)
+    return modified_res[0][0]
+
+
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 

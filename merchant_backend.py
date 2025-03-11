@@ -7,7 +7,7 @@ import sounddevice as sd
 
 
 from agents.tavily_search_agent import tavily_search
-from utils import initialize_db, insert_data_to_redis, retrieve_data_from_redis
+from utils import fetch_restaurant_name, initialize_db, insert_data_to_redis, retrieve_data_from_redis
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -130,7 +130,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
             [f"user_query: {entry['query']}\nai_response: {entry['ai_response']}\n" for entry in chat_history]
         ) if chat_history else ""
 
-        RESTAURANT_NAME = os.environ.get("RESTAURANT_NAME")
+        RESTAURANT_NAME = fetch_restaurant_name()
         reference_data = get_business_reference_data(query=query)
 
         prompt_template = f"""Restaurnat Name: {RESTAURANT_NAME}
