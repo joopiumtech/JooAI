@@ -124,7 +124,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         tools = toolkit.get_tools()
         
         # Retrieve memory context
-        chat_history = get_merchant_memory(email=email)
+        chat_history = get_merchant_memory(email=email) or "[]"
         chat_history = ast.literal_eval(chat_history)
 
         # Process chat history
