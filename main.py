@@ -31,7 +31,7 @@ class MerchantAuthRequest(BaseModel):
 class MerchantAuthResponse(BaseModel):
     is_authenticated: bool
     auth_message: str
-    access_token: str = None  # Include token in the response
+    access_token: str = None 
 
 
 @app.post("/auth", response_model=MerchantAuthResponse)
