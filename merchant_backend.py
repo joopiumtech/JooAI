@@ -130,7 +130,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         # Process chat history
         memory_context = "\n".join(
             [f"merchant_query: {merchant_query}\nai_response: {ai_response}\n" for merchant_query, ai_response in chat_history]
-        ) if chat_history else "[]"
+        )
 
         RESTAURANT_NAME = fetch_restaurant_name()
         reference_data = get_business_reference_data(query=query)
