@@ -4,10 +4,11 @@ import wave
 import numpy as np
 import openai
 import sounddevice as sd
+import ast
 
 
 from agents.tavily_search_agent import tavily_search
-from utils import fetch_restaurant_name, initialize_db, insert_data_to_redis, retrieve_data_from_redis
+from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -123,12 +124,13 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         tools = toolkit.get_tools()
         
         # Retrieve memory context
-        chat_history = retrieve_data_from_redis(email=email)
+        chat_history = get_merchant_memory(email=email)
+        chat_history = ast.literal_eval(chat_history)
 
         # Process chat history
         memory_context = "\n".join(
-            [f"user_query: {entry['query']}\nai_response: {entry['ai_response']}\n" for entry in chat_history]
-        ) if chat_history else ""
+            [f"merchant_query: {merchant_query}\nai_response: {ai_response}\n" for merchant_query, ai_response in chat_history]
+        ) if chat_history else "[]"
 
         RESTAURANT_NAME = fetch_restaurant_name()
         reference_data = get_business_reference_data(query=query)
@@ -179,10 +181,10 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
             for old, new in replacements.items():
                 tavily_response = tavily_response.replace(old, new)
 
-            insert_data_to_redis(email=email, query=query, ai_response=tavily_response)
+            store_merchant_memory(email=email, merchant_query=query, ai_response=tavily_response)
             response_text = tavily_response
         else:
-            insert_data_to_redis(email=email, query=query, ai_response=final_answer)
+            store_merchant_memory(email=email, merchant_query=query, ai_response=final_answer)
             response_text = final_answer
 
         # Convert response to speech and return

@@ -11,7 +11,7 @@ from langchain.agents import (
     AgentExecutor,
 )
 from langchain import hub
-from utils import retrieve_data_from_redis
+from utils import get_merchant_memory
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -31,16 +31,13 @@ def tavily_search(input: str):
     
 
     # Retrieve memory context
-    chat_history = retrieve_data_from_redis(email=email)
+    chat_history = get_merchant_memory(email=email)
+    chat_history = ast.literal_eval(chat_history)
 
-    # Check if chat_history has any data
-    if chat_history:
-        memory_context = ""
-        for entry in chat_history:
-            memory_context += f"user_query: {entry['query']}\n"
-            memory_context += f"ai_response: {entry['ai_response']}\n\n"
-    else:
-        memory_context = ""  # Empty memory context if no past interactions
+    # Process chat history
+    memory_context = "\n".join(
+        [f"merchant_query: {merchant_query}\nai_response: {ai_response}\n" for merchant_query, ai_response in chat_history]
+    ) if chat_history else "[]"
 
     template = f"""Based on the chat history: {memory_context} and user input: {input} you should search for updated information on the web. Please make sure the information is clear and relevant."""
 
