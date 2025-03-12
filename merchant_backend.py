@@ -176,7 +176,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
             final_answer = final_answer.replace(old, new)
         
         # If the AI cannot retrieve an answer, use external search
-        if any(phrase in final_answer for phrase in ["I cannot retrieve", "I don''t know"]):
+        if any(phrase in final_answer for phrase in ["I cannot retrieve", "I don''t know", "I don''t have"]):
             tavily_response = tavily_search(input=query)
             for old, new in replacements.items():
                 tavily_response = tavily_response.replace(old, new)
