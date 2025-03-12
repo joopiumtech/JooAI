@@ -6,6 +6,8 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from auth import auth_test, get_current_user
 from merchant_backend import query_db_for_merchant, record_audio, recording_event
+from fastapi.middleware.cors import CORSMiddleware
+
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -13,6 +15,15 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI()
+
+# Allow requests from frontend origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
