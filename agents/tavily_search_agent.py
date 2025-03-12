@@ -31,13 +31,13 @@ def tavily_search(input: str):
     
 
     # Retrieve memory context
-    chat_history = get_merchant_memory(email=email)
+    chat_history = get_merchant_memory(email=email) or "[]"
     chat_history = ast.literal_eval(chat_history)
 
     # Process chat history
     memory_context = "\n".join(
         [f"merchant_query: {merchant_query}\nai_response: {ai_response}\n" for merchant_query, ai_response in chat_history]
-    ) if chat_history else "[]"
+    )
 
     template = f"""Based on the chat history: {memory_context} and user input: {input} you should search for updated information on the web. Please make sure the information is clear and relevant."""
 
