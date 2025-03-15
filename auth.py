@@ -59,7 +59,7 @@ def auth_test(email: str, password: str):
     except Exception as error:
         return {
             "is_authenticated": False,
-            "auth_message": f"There is an error occured.\nError: {error}"
+            "auth_message": f"Oops! Something went wrong. Please try again."
         }
     
 
