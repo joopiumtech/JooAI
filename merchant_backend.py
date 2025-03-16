@@ -115,6 +115,10 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         if not query:
             return {"ai_response": "No query provided."}
 
+        query_replacements = {"'": " ", '"': " ", "/": " ", "//": " "}
+        for old, new in query_replacements.items():
+            query = query.replace(old, new)
+        
         # Initialize database
         db = initialize_db()
         email = os.environ.get("ADMIN_EMAIL")
