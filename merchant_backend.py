@@ -115,6 +115,10 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         if not query:
             return {"ai_response": "No query provided."}
 
+        query_replacements = {"'": " ", '"': " ", "/": " ", "//": " "}
+        for old, new in query_replacements.items():
+            query = query.replace(old, new)
+        
         # Initialize database
         db = initialize_db()
         email = os.environ.get("ADMIN_EMAIL")
@@ -191,6 +195,6 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         return {"ai_response": response_text}
 
     except Exception as error:
-        return {"ai_response": f"An error occurred.\nError: {error}"}
+        return {"ai_response": f"Oops! Something went wrong. Please try again."}
 
 
