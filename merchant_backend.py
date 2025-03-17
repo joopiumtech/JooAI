@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import wave
 import numpy as np
@@ -28,7 +29,6 @@ llm = ChatOpenAI(
     api_key=os.environ.get("OPENAI_API_KEY"),
     streaming=True
 )
-
 
 
 # Shared event for controlling recording
@@ -108,16 +108,11 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     Returns:
         dict: A dictionary containing the AI-generated response.
     """
-    try:
-        if audio_query:
-            query = speech_to_text(filename="input_audio/input.wav")
-        
+    try:        
         if not query:
             return {"ai_response": "No query provided."}
 
-        query_replacements = {"'": " ", '"': " ", "/": " ", "//": " "}
-        for old, new in query_replacements.items():
-            query = query.replace(old, new)
+        query = re.sub(r"[\"'/]", " ", query)
         
         # Initialize database
         db = initialize_db()
@@ -140,55 +135,51 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         reference_data = get_business_reference_data(query=query)
 
         prompt_template = f"""Restaurnat Name: {RESTAURANT_NAME}
-        You are an AI assistant designed to interact with {RESTAURANT_NAME}'s SQL database to answer queries related to the restaurant's operations, based on the chat history: {memory_context} and input question: {query}.
+        You are an AI assistant for {RESTAURANT_NAME}, interacting with its SQL database to answer queries based on:
+        Chat History: {memory_context}
+        User Query: {query}
 
-        Guidelines for Query Execution:
-        Understanding the Database:
-        - Before generating any query, first retrieve and examine the available tables to understand what data can be accessed.
-        - Identify the most relevant tables and check their schema before constructing your query.
-        - If query is related to business development. Use {reference_data} for your reference.
-        - Always represent monetary values in British pounds (£). If a value is given in another currency, convert it to pounds (£) using the most recent exchange rate. Clearly indicate the conversion when applicable. Never use dollars ($) or any other currency unless explicitly requested.
+        Your goal is to provide accurate, concise, and insightful answers based on the restaurant's data.
 
-        Constructing SQL Queries:
-        - Generate only syntactically correct {{dialect}} queries.
-        - Focus only on relevant columns instead of selecting all columns from a table.
-        - Unless the user specifies a particular number of results, limit queries to {{top_k}} results for efficiency.
-        - When applicable, order results by a relevant column to provide the most insightful answers.
-        
+        Query Execution Guidelines
+        Database Understanding:
+        First, retrieve and examine table structures before generating queries.
+        Identify relevant tables and fields.
+        For business-related queries, refer to {reference_data}.
+
+        SQL Query Construction:
+        Generate valid {{dialect}} SQL queries.
+        Select only necessary columns, avoid SELECT *.
+        Limit results to {{top_k}}, unless specified otherwise.
+        Sort results meaningfully.
+        Use British pounds (£) for monetary values, converting when necessary.
+
         Execution & Error Handling:
-        - Always double-check your query before execution.
-        - If an error occurs, refine the query and retry instead of returning incorrect results.
-        - For queries related to bookings, retrieve only the most up-to-date information from the bookings table. If no data is available, respond strictly with: "Currently, there are no booking records available." 
-        - If you can answer it directly, do so.
-        - If you don't know the answer, strictly respond with "I don't know". Don't try to create an answer from the data.
+        Verify queries before execution and refine if errors occur.
+        For bookings, return only latest records or say: "Currently, there are no booking records available."
+        Answer directly when possible; otherwise, say "I don't know" —never guess.
 
         Restrictions:
-        - Do NOT execute any DML (INSERT, UPDATE, DELETE, DROP, etc.) operations—your role is strictly read-only.
-        - Only use the tools provided to interact with the database and rely solely on the returned data to construct responses.
-        
-        Your goal is to provide accurate, concise, and insightful answers based on the restaurant's data."""
+        Read-Only Access – No INSERT, UPDATE, DELETE, or DROP.
+        Use only approved database tools for responses.
+        """
         
         system_message = prompt_template.format(dialect="mysql", top_k=5)
         agent_executor = create_react_agent(llm, tools, prompt=system_message)
 
         response = agent_executor.invoke({"messages": [{"role": "user", "content": query}]})
         final_answer = response["messages"][-1].content.strip()
-
-        # Replace problematic characters
-        replacements = {"'": "''", '"': '""', "\\": "\\\\"}
-        for old, new in replacements.items():
-            final_answer = final_answer.replace(old, new)
+        final_answer_db_values = re.sub(r"[\"'\\]", lambda m: {"'": "''", '"': '""', "\\": "\\\\"}[m.group()], final_answer)
         
         # If the AI cannot retrieve an answer, use external search
-        if any(phrase in final_answer for phrase in ["I cannot retrieve", "I don''t know", "I don''t have"]):
+        if any(phrase in final_answer for phrase in ["I cannot retrieve", "I don't know", "I don't have"]):
             tavily_response = tavily_search(input=query)
-            for old, new in replacements.items():
-                tavily_response = tavily_response.replace(old, new)
+            tavily_response_db_values = re.sub(r"[\"'\\]", lambda m: {"'": "''", '"': '""', "\\": "\\\\"}[m.group()], tavily_response)
 
-            store_merchant_memory(email=email, merchant_query=query, ai_response=tavily_response)
+            store_merchant_memory(email=email, merchant_query=query, ai_response=tavily_response_db_values)
             response_text = tavily_response
         else:
-            store_merchant_memory(email=email, merchant_query=query, ai_response=final_answer)
+            store_merchant_memory(email=email, merchant_query=query, ai_response=final_answer_db_values)
             response_text = final_answer
 
         # Convert response to speech and return
@@ -196,5 +187,4 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
 
     except Exception as error:
         return {"ai_response": f"Oops! Something went wrong. Please try again."}
-
-
+        
