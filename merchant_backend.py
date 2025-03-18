@@ -1,12 +1,6 @@
 import os
 import re
-import threading
-import wave
-import numpy as np
-import openai
-import sounddevice as sd
 import ast
-
 
 from agents.tavily_search_agent import tavily_search
 from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory
@@ -30,35 +24,6 @@ llm = ChatOpenAI(
     streaming=True
 )
 
-
-# Shared event for controlling recording
-recording_event = threading.Event()
-samplerate = 16000
-filename = "input_audio/input.wav"
-
-
-def record_audio():
-    """ Continuously records audio until stopped using an event flag. """
-    recording_event.set()  # Start recording
-
-    with wave.open(filename, "wb") as f:
-        f.setnchannels(1)
-        f.setsampwidth(2)
-        f.setframerate(samplerate)
-
-        while recording_event.is_set():
-            chunk = sd.rec(int(samplerate * 1), samplerate=samplerate, channels=1, dtype=np.int16)
-            sd.wait()
-            f.writeframes(chunk.tobytes())
-
-
-def speech_to_text(filename: str):
-    with open(filename, "rb") as audio_file:
-        response = openai.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
-        )
-    return response.text
 
 
 
@@ -97,7 +62,7 @@ def get_business_reference_data(query: str):
     
 
 
-def query_db_for_merchant(query: str = None, audio_query: bool = False):
+def query_db_for_merchant(query: str = None):
     """
     Authenticates a merchant and processes a text or audio query using an LLM-powered agent.
 

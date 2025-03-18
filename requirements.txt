@@ -13,4 +13,3 @@ passlib
 pinecone
 langchain_pinecone
 redis
-sounddevice

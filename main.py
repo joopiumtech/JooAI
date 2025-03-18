@@ -56,32 +56,6 @@ async def merchant_auth(request: MerchantAuthRequest):
 
 
 
-
-# ----------------------------------------------------------------
-# Merchant Audio API
-# ----------------------------------------------------------------
-@app.post("/start-recording")
-async def start_recording(current_user: str = Depends(get_current_user),):
-    """ API to start recording audio. """
-    if recording_event.is_set():
-        raise HTTPException(status_code=400, detail="Recording is already in progress.")
-    
-    thread = threading.Thread(target=record_audio)
-    thread.start()
-    return {"message": "Recording started."}
-
-
-@app.post("/stop-recording")
-async def stop_recording(current_user: str = Depends(get_current_user),):
-    """ API to stop recording audio and save the file. """
-    if not recording_event.is_set():
-        raise HTTPException(status_code=400, detail="No active recording.")
-
-    recording_event.clear()  # Stop recording
-    return {"message": "Recording stopped."}
-
-
-
 # ----------------------------------------------------------------
 # Merchant Chat API
 # ----------------------------------------------------------------
