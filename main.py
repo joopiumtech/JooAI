@@ -1,11 +1,7 @@
-
-import threading
-
-
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from auth import auth_test, get_current_user
-from merchant_backend import query_db_for_merchant, record_audio, recording_event
+from merchant_backend import query_db_for_merchant
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -61,7 +57,6 @@ async def merchant_auth(request: MerchantAuthRequest):
 # ----------------------------------------------------------------
 class MerchantQueryRequest(BaseModel):
     query: str
-    audio_query: bool
 
 
 class MerchantQueryResponse(BaseModel):
@@ -75,7 +70,7 @@ async def merchant_query(
 ):
     """ FastAPI endpoint to handle merchant queries. """
     try:
-        result = query_db_for_merchant(query=request.query, audio_query=request.audio_query)
+        result = query_db_for_merchant(query=request.query)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")

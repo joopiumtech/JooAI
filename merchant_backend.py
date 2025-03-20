@@ -26,7 +26,6 @@ llm = ChatOpenAI(
 
 
 
-
 def get_business_reference_data(query: str):
     # Initialize pinecone
     pinecone_api_key = os.environ.get("PINECONE_API_KEY")
