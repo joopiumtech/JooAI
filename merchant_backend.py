@@ -110,7 +110,8 @@ def query_db_for_merchant(query: str = None):
         First, retrieve and examine table structures before generating queries.
         Identify relevant tables and fields.
         For business-related queries, refer to {reference_data}.
-
+        For total sales-related queries, consider only records where the status column is set to 1 for calculations.
+        
         SQL Query Construction:
         Generate valid {{dialect}} SQL queries.
         Select only necessary columns, avoid SELECT *.
