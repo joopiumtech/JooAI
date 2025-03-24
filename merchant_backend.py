@@ -1,44 +1,46 @@
 import os
 import re
-import ast
 import openai
-import pygame
-import time
-
-from agents.tavily_search_agent import tavily_search
-from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory, initialize_pinecone
+from dotenv import load_dotenv
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_openai import ChatOpenAI
 
+# Import utilities
+from agents.tavily_search_agent import tavily_search
+from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory, initialize_pinecone
+
 # Load environment variables
-from dotenv import load_dotenv
 load_dotenv(override=True)
 
+# Pre-compile regex patterns
+QUERY_CLEANER = re.compile(r"[\"'/]")
+ESCAPE_DB_VALUES = re.compile(r"[\"'\\]")
 
-# Initialize the LLM model
-llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=0,
-    max_retries=1,
-    api_key=os.environ.get("OPENAI_API_KEY"),
-    streaming=True
-)
+# Global initializations
+llm = ChatOpenAI(model="gpt-4o", temperature=0, max_retries=1, api_key=os.getenv("OPENAI_API_KEY"), streaming=True)
+db = initialize_db()
+vector_store = initialize_pinecone()
+
+
+def sanitize_query(query: str) -> str:
+    """Sanitize user input for safer processing."""
+    return QUERY_CLEANER.sub(" ", query)
+
+
+def escape_db_values(text: str) -> str:
+    """Escape special characters in text for database storage."""
+    return ESCAPE_DB_VALUES.sub(lambda m: {"'": "''", '"': '""', "\\": "\\\\"}[m.group()], text)
 
 
 def text_to_speech(text, filename="audio_response/response.mp3"):
-    """
-    Converts text to speech using OpenAI TTS and plays it.
-    """
-    response = openai.audio.speech.create(
-        model="tts-1",
-        voice="alloy",
-        input=text
-    )
+    """Convert text to speech and play it."""
+    import pygame
+    import time
     
-    # Ensure the directory exists
+    response = openai.audio.speech.create(model="tts-1", voice="alloy", input=text)
+    
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-
     with open(filename, "wb") as f:
         f.write(response.content)
 
@@ -47,120 +49,74 @@ def text_to_speech(text, filename="audio_response/response.mp3"):
     pygame.mixer.music.play()
     
     while pygame.mixer.music.get_busy():
-        time.sleep(0.1)  # Small delay to allow playback to finish
+        time.sleep(0.1)
 
-    # Stop and unload music to allow overwriting
     pygame.mixer.music.stop()
     pygame.mixer.quit()
 
 
-def get_business_reference_data(query: str):
-    # Initialize pinecone
-    vector_store = initialize_pinecone()
-
-    results = vector_store.similarity_search(
-        query,
-        k=5,
-        namespace="marketing_plan"
-    )
-    for res in results:
-        return res.page_content
-    
+def get_business_reference_data(query: str) -> str:
+    """Retrieve relevant business data from Pinecone."""
+    results = vector_store.similarity_search(query, k=5, namespace="marketing_plan")
+    return results[0].page_content if results else ""
 
 
 def query_db_for_merchant(query: str = None, audio_query: bool = False):
+    """Process merchant queries with database interactions and AI assistance."""
+    if not query:
+        return {"ai_response": "No query provided."}
+
+    query = sanitize_query(query)
+    email = os.getenv("ADMIN_EMAIL")
+
+    # Fetch restaurant and memory context
+    restaurant_name = fetch_restaurant_name()
+    chat_history = get_merchant_memory(email) or "[]"
+
+    # Process chat history (without ast.literal_eval for speed)
+    memory_context = "\n".join(
+        f"merchant_query: {entry[0]}\nai_response: {entry[1]}\n" for entry in eval(chat_history)
+    )
+
+    reference_data = get_business_reference_data(query)
+
+    # Construct prompt
+    system_message = f"""Restaurant Name: {restaurant_name}
+    You are an AI assistant for {restaurant_name}, interacting with its SQL database to answer queries based on:
+    Chat History: {memory_context}
+    User Query: {query}
+
+    Query Execution Guidelines:
+    - Retrieve table structures before generating queries.
+    - Use valid MySQL queries, selecting only necessary columns.
+    - Limit results to 5 unless otherwise specified.
+    - For sales-related queries, filter records where `status = 1` before summing values.
+    - Read-only access (no INSERT, UPDATE, DELETE, DROP).
+    - If unsure, respond with "I don't know" instead of guessing.
+    - For business-related queries, refer to {reference_data}.
     """
-    Authenticates a merchant and processes a text or audio query using an LLM-powered agent.
 
-    Args:
-        query (str, optional): The text query to be executed. Not required if using audio input.
-        audio_query (bool, optional): If True, records an audio query, transcribes it, and then processes it.
+    # Initialize agent executor
+    toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+    agent_executor = create_react_agent(llm, toolkit.get_tools(), prompt=system_message)
 
-    Returns:
-        dict: A dictionary containing the AI-generated response.
-    """
-    try:        
-        if not query:
-            return {"ai_response": "No query provided."}
-
-        query = re.sub(r"[\"'/]", " ", query)
-        
-        # Initialize database
-        db = initialize_db()
-        email = os.environ.get("ADMIN_EMAIL")
-
-        """Creates and returns an agent executor configured for the database."""
-        toolkit = SQLDatabaseToolkit(db=db, llm=llm)
-        tools = toolkit.get_tools()
-        
-        # Retrieve memory context
-        chat_history = get_merchant_memory(email=email) or "[]"
-        chat_history = ast.literal_eval(chat_history)
-
-        # Process chat history
-        memory_context = "\n".join(
-            [f"merchant_query: {merchant_query}\nai_response: {ai_response}\n" for merchant_query, ai_response in chat_history]
-        )
-
-        RESTAURANT_NAME = fetch_restaurant_name()
-        reference_data = get_business_reference_data(query=query)
-
-        prompt_template = f"""Restaurnat Name: {RESTAURANT_NAME}
-        You are an AI assistant for {RESTAURANT_NAME}, interacting with its SQL database to answer queries based on:
-        Chat History: {memory_context}
-        User Query: {query}
-
-        Your goal is to provide accurate, concise, and insightful answers based on the restaurant's data.
-
-        Query Execution Guidelines
-        Database Understanding:
-        First, retrieve and examine table structures before generating queries.
-        Identify relevant tables and fields.
-        For business-related queries, refer to {reference_data}.
-        
-        SQL Query Construction:
-        Generate valid {{dialect}} SQL queries.
-        Select only necessary columns, avoid SELECT *.
-        Limit results to {{top_k}}, unless specified otherwise.
-        Sort results meaningfully.
-        Use British pounds (£) for monetary values, converting when necessary.
-
-        Execution & Error Handling:
-        Verify queries before execution and refine if errors occur.
-        For bookings, return only latest records or say: "Currently, there are no booking records available."
-        Answer directly when possible; otherwise, say "I don't know" —never guess.
-        For queries related to "total sales," retrieve only records where status = 1 and calculate the total sum. 
-
-        Restrictions:
-        Read-Only Access – No INSERT, UPDATE, DELETE, or DROP.
-        Use only approved database tools for responses.
-        """
-        
-        system_message = prompt_template.format(dialect="mysql", top_k=5)
-        agent_executor = create_react_agent(llm, tools, prompt=system_message)
-
+    try:
         response = agent_executor.invoke({"messages": [{"role": "user", "content": query}]})
         final_answer = response["messages"][-1].content.strip()
-        final_answer_db_values = re.sub(r"[\"'\\]", lambda m: {"'": "''", '"': '""', "\\": "\\\\"}[m.group()], final_answer)
-        
-        # If the AI cannot retrieve an answer, use external search
-        if any(phrase in final_answer for phrase in ["I cannot retrieve", "I don't know", "I don't have"]):
-            tavily_response = tavily_search(input=query)
-            tavily_response_db_values = re.sub(r"[\"'\\]", lambda m: {"'": "''", '"': '""', "\\": "\\\\"}[m.group()], tavily_response)
 
-            store_merchant_memory(email=email, merchant_query=query, ai_response=tavily_response_db_values)
-            response_text = tavily_response
+        if "I cannot retrieve" in final_answer or "I don't know" in final_answer:
+            response_text = tavily_search(input=query)
         else:
-            store_merchant_memory(email=email, merchant_query=query, ai_response=final_answer_db_values)
             response_text = final_answer
 
-        
-        if audio_query:
-            text_to_speech(text=response_text)
-            return {"ai_response": response_text}
-        else:
-            return {"ai_response": response_text}
+        # Store response in memory
+        store_merchant_memory(email=email, merchant_query=query, ai_response=escape_db_values(response_text))
 
-    except Exception as error:
-        return {"ai_response": f"Oops! Something went wrong. Please try again."}
+        # Play audio if requested
+        if audio_query:
+            text_to_speech(response_text)
         
+        return {"ai_response": response_text}
+
+    except Exception:
+        return {"ai_response": "Oops! Something went wrong. Please try again."}
