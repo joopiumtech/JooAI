@@ -162,5 +162,5 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
             return {"ai_response": response_text}
 
     except Exception as error:
-        return {"ai_response": f"Oops! Something went wrong. Please try again.\n{error}"}
+        return {"ai_response": f"Oops! Something went wrong. Please try again."}
         
