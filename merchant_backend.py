@@ -1,6 +1,9 @@
 import os
 import re
 import ast
+import openai
+import pygame
+import time
 
 from agents.tavily_search_agent import tavily_search
 from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory
@@ -24,6 +27,33 @@ llm = ChatOpenAI(
     streaming=True
 )
 
+
+def text_to_speech(text, filename="audio_response/response.mp3"):
+    """
+    Converts text to speech using OpenAI TTS and plays it.
+    """
+    response = openai.audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input=text
+    )
+    
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+    with open(filename, "wb") as f:
+        f.write(response.content)
+
+    pygame.mixer.init()
+    pygame.mixer.music.load(filename)
+    pygame.mixer.music.play()
+    
+    while pygame.mixer.music.get_busy():
+        time.sleep(0.1)  # Small delay to allow playback to finish
+
+    # Stop and unload music to allow overwriting
+    pygame.mixer.music.stop()
+    pygame.mixer.quit()
 
 
 def get_business_reference_data(query: str):
@@ -61,7 +91,7 @@ def get_business_reference_data(query: str):
     
 
 
-def query_db_for_merchant(query: str = None):
+def query_db_for_merchant(query: str = None, audio_query: bool = False):
     """
     Authenticates a merchant and processes a text or audio query using an LLM-powered agent.
 
@@ -147,9 +177,13 @@ def query_db_for_merchant(query: str = None):
             store_merchant_memory(email=email, merchant_query=query, ai_response=final_answer_db_values)
             response_text = final_answer
 
-        # Convert response to speech and return
-        return {"ai_response": response_text}
+        
+        if audio_query:
+            text_to_speech(text=response_text)
+            return {"ai_response": response_text}
+        else:
+            return {"ai_response": response_text}
 
     except Exception as error:
-        return {"ai_response": f"Oops! Something went wrong. Please try again."}
+        return {"ai_response": f"Oops! Something went wrong. Please try again.\n{error}"}
         
