@@ -92,7 +92,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     - Limit results to 5 unless otherwise specified.
     - For sales-related queries, filter records where `status = 1` before summing values.
     - Read-only access (no INSERT, UPDATE, DELETE, DROP).
-    - If unsure, respond with "I don't know" instead of guessing.
+    - If unsure, strictly respond with "I don't know" instead of guessing.
     - For business-related queries, refer to {reference_data}.
     """
 
@@ -104,7 +104,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         response = agent_executor.invoke({"messages": [{"role": "user", "content": query}]})
         final_answer = response["messages"][-1].content.strip()
 
-        if "I cannot retrieve" in final_answer or "I don't know" in final_answer:
+        if "I cannot retrieve" in final_answer or "I don't know" in final_answer or "I don't have" in final_answer:
             response_text = tavily_search(input=query)
         else:
             response_text = final_answer
