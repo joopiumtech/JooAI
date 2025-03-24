@@ -6,12 +6,10 @@ import pygame
 import time
 
 from agents.tavily_search_agent import tavily_search
-from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory
+from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory, initialize_pinecone
 from langgraph.prebuilt import create_react_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pinecone import Pinecone, ServerlessSpec
-from langchain_pinecone import PineconeVectorStore
+from langchain_openai import ChatOpenAI
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -58,28 +56,7 @@ def text_to_speech(text, filename="audio_response/response.mp3"):
 
 def get_business_reference_data(query: str):
     # Initialize pinecone
-    pinecone_api_key = os.environ.get("PINECONE_API_KEY")
-    pc = Pinecone(api_key=pinecone_api_key)
-    index_name = os.environ.get("INDEX_NAME")
-    existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
-
-    if index_name not in existing_indexes:
-        pc.create_index(
-            name=index_name,
-            dimension=3072,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region=os.environ.get("PINECONE_ENVIRONMENT")),
-        )
-
-    index = pc.Index(index_name)
-
-    # Initialize embedding model
-    embedding_model = OpenAIEmbeddings(
-        model="text-embedding-3-large",
-        api_key=os.environ.get('OPENAI_API_KEY')
-    )
-
-    vector_store = PineconeVectorStore(index=index, embedding=embedding_model)
+    vector_store = initialize_pinecone()
 
     results = vector_store.similarity_search(
         query,

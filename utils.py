@@ -3,6 +3,9 @@ import ast
 import bcrypt
 
 from langchain_community.utilities import SQLDatabase
+from pinecone import Pinecone, ServerlessSpec
+from langchain_pinecone import PineconeVectorStore
+from langchain_openai import OpenAIEmbeddings
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
@@ -86,3 +89,34 @@ def store_merchant_memory(email: str, merchant_query: str, ai_response: str):
     
 #     # Retrieve all elements in the list
 #     return [json.loads(item) for item in r.lrange(key, 0, -1)]
+
+
+# ----------------------------------------------------------------------------
+# Pinecone Utils
+# ----------------------------------------------------------------------------
+
+def initialize_pinecone():
+    pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+    pc = Pinecone(api_key=pinecone_api_key)
+    index_name = os.environ.get("INDEX_NAME")
+    existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
+
+    if index_name not in existing_indexes:
+        pc.create_index(
+            name=index_name,
+            dimension=3072,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region=os.environ.get("PINECONE_ENVIRONMENT")),
+        )
+
+    index = pc.Index(index_name)
+
+    # Initialize embedding model
+    embedding_model = OpenAIEmbeddings(
+        model="text-embedding-3-large",
+        api_key=os.environ.get('OPENAI_API_KEY')
+    )
+
+    vector_store = PineconeVectorStore(index=index, embedding=embedding_model)
+    return vector_store
+    
