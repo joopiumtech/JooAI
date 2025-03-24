@@ -110,7 +110,6 @@ def query_db_for_merchant(query: str = None):
         First, retrieve and examine table structures before generating queries.
         Identify relevant tables and fields.
         For business-related queries, refer to {reference_data}.
-        For total sales-related queries, consider only records where the status column is set to 1 for calculations.
         
         SQL Query Construction:
         Generate valid {{dialect}} SQL queries.
@@ -123,6 +122,7 @@ def query_db_for_merchant(query: str = None):
         Verify queries before execution and refine if errors occur.
         For bookings, return only latest records or say: "Currently, there are no booking records available."
         Answer directly when possible; otherwise, say "I don't know" —never guess.
+        For queries related to "total sales," retrieve only records where status = 1 and calculate the total sum. 
 
         Restrictions:
         Read-Only Access – No INSERT, UPDATE, DELETE, or DROP.

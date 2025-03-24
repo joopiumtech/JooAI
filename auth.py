@@ -13,7 +13,6 @@ load_dotenv(override=True)
 # Secret Key for JWT
 SECRET_KEY = os.environ.get("JWT_SECRET")
 ALGORITHM = os.environ.get("ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth")
