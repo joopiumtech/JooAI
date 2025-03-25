@@ -61,6 +61,19 @@ def get_business_reference_data(query: str) -> str:
     return results[0].page_content if results else ""
 
 
+
+def get_drinks_reference_data(query: str) -> str:
+    """Retrieve relevant drinks data from Pinecone."""
+    results = vector_store.similarity_search(query, k=5, namespace="drinks_menu")
+    return results[0].page_content if results else ""
+
+
+def get_desert_reference_data(query: str) -> str:
+    """Retrieve relevant desert data from Pinecone."""
+    results = vector_store.similarity_search(query, k=5, namespace="desert_menu")
+    return results[0].page_content if results else ""
+
+
 def query_db_for_merchant(query: str = None, audio_query: bool = False):
     """Process merchant queries with database interactions and AI assistance."""
     if not query:
@@ -78,7 +91,9 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
         f"merchant_query: {entry[0]}\nai_response: {entry[1]}\n" for entry in eval(chat_history)
     )
 
-    reference_data = get_business_reference_data(query)
+    business_reference_data = get_business_reference_data(query)
+    drinks_reference_data = get_drinks_reference_data(query)
+    desert_reference_data = get_desert_reference_data(query)
 
     # Construct prompt
     system_message = f"""Restaurant Name: {restaurant_name}
@@ -93,7 +108,9 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     - For sales-related queries, filter records where `status = 1` before summing values.
     - Read-only access (no INSERT, UPDATE, DELETE, DROP).
     - If unsure, strictly respond with "I don't know" instead of guessing.
-    - For business-related queries, refer to {reference_data}.
+    - For business-related queries, refer to {business_reference_data}.
+    - For drinks-related queries, refer to {drinks_reference_data}.
+    - For desert-related queries, refer to {desert_reference_data}.
     """
 
     # Initialize agent executor

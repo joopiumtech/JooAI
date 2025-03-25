@@ -14,7 +14,7 @@ embedding_model = OpenAIEmbeddings(
 )
 
 
-def upload_pdf(pdf_path: str):
+def upload_pdf(pdf_path: str, namespace: str):
   '''
   This function is used to upload a document to the Pinecone vector database.
   
@@ -41,7 +41,7 @@ def upload_pdf(pdf_path: str):
     text_chunks,
     embedding_model,
     index_name=os.environ.get('INDEX_NAME'),
-    namespace="marketing_plan",
+    namespace=namespace,
     pinecone_api_key=os.environ.get("PINECONE_API_KEY")
   )
   print("PDF upload complete!.")
