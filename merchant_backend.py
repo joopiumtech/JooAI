@@ -111,6 +111,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     - For business-related queries, refer to {business_reference_data}.
     - For drinks-related queries, refer to {drinks_reference_data}.
     - For desert-related queries, refer to {desert_reference_data}.
+    - If the query pertains to allergies, refer to the orders table and examine the other_info column for any recorded allergy information.
     """
 
     # Initialize agent executor
