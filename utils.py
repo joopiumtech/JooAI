@@ -48,7 +48,7 @@ def verify_password(plain_password, hashed_password):
 def get_merchant_memory(email: str):
     db = initialize_db()
     """Retrieve the last few interactions from MySQL memory."""
-    query = f"""SELECT merchant_query, ai_response FROM merchant_memory WHERE email = '{email}' ORDER BY created_at"""
+    query = f"""SELECT merchant_query, ai_response FROM merchant_memory WHERE email = '{email}' ORDER BY created_at DESC LIMIT 5"""
     response = db.run(query)
     return response
 
