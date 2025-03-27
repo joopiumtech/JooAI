@@ -103,9 +103,6 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     Understanding the Database:
     - Before generating any query, first retrieve and examine the available tables to understand what data can be accessed.
     - Identify the most relevant tables and check their schema before constructing your query.
-    - For business-related queries, refer to {business_reference_data}.
-    - For drinks-related queries, refer to {drinks_reference_data}.
-    - For desert-related queries, refer to {desert_reference_data}.
     - Always represent monetary values in British pounds (£). If a value is given in another currency, convert it to pounds (£) using the most recent exchange rate. Clearly indicate the conversion when applicable. Never use dollars ($) or any other currency unless explicitly requested.
 
     Constructing SQL Queries:
@@ -118,6 +115,10 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     - Always double-check your query before execution.
     - If an error occurs, refine the query and retry instead of returning incorrect results.
     - For queries related to bookings, retrieve only the most up-to-date information from the bookings table. If no data is available, respond strictly with: "Currently, there are no booking records available." 
+    - For business-related queries, refer to {business_reference_data}.
+    - For drinks-related queries, refer to {drinks_reference_data}.
+    - For desert-related queries, refer to {desert_reference_data}.
+    - If the query pertains to allergies, refer to the orders table and examine the other_info column for any recorded allergy information.
     - If you can answer it directly, do so.
     - If you don't know the answer, strictly respond with "I don't know". Don't try to create an answer from the data.
 
