@@ -139,6 +139,8 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
 
         if "I cannot retrieve" in final_answer or "I don't know" in final_answer or "I don't have" in final_answer:
             response_text = tavily_search(input=query)
+        elif "I encountered an issue" in final_answer:
+            return {"ai_response": "Oops! Something went wrong. Please try again."}
         else:
             response_text = final_answer
 
