@@ -71,7 +71,7 @@ async def merchant_query(
 ):
     """ FastAPI endpoint to handle merchant queries. """
     try:
-        result = query_db_for_merchant(query=request.query, audio_query=request.audio_query)
+        result = await query_db_for_merchant(query=request.query, audio_query=request.audio_query)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
