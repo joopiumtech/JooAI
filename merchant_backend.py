@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 
 # Import utilities
 from agents.tavily_search_agent import tavily_search
-from utils import fetch_restaurant_name, initialize_db, store_merchant_memory, get_merchant_memory, initialize_pinecone
+from utils import fetch_restaurant_details, initialize_db, store_merchant_memory, get_merchant_memory, initialize_pinecone
 
 # Load environment variables
 load_dotenv(override=True)
@@ -18,7 +18,7 @@ QUERY_CLEANER = re.compile(r"[\"'/]")
 ESCAPE_DB_VALUES = re.compile(r"[\"'\\]")
 
 # Global initializations
-llm = ChatOpenAI(model="gpt-4o", temperature=0, max_retries=1, api_key=os.getenv("OPENAI_API_KEY"), streaming=True)
+llm = ChatOpenAI(model="gpt-4-turbo", temperature=0, max_retries=1, api_key=os.getenv("OPENAI_API_KEY"), streaming=True, max_completion_tokens=500)
 db = initialize_db()
 vector_store = initialize_pinecone()
 
@@ -83,7 +83,7 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     email = os.getenv("ADMIN_EMAIL")
 
     # Fetch restaurant and memory context
-    restaurant_name = fetch_restaurant_name()
+    restaurant_details = fetch_restaurant_details()
     chat_history = get_merchant_memory(email) or "[]"
 
     # Process chat history (without ast.literal_eval for speed)
@@ -96,8 +96,11 @@ def query_db_for_merchant(query: str = None, audio_query: bool = False):
     desert_reference_data = get_desert_reference_data(query)
 
     # Construct prompt
-    system_message = f"""Restaurnat Name: {restaurant_name}
-    You are an AI assistant designed to interact with {restaurant_name}'s SQL database to answer queries related to the restaurant's operations, based on the chat history: {memory_context} and input question: {query}.
+    system_message = f"""Restaurnat Name: {restaurant_details["restaurant_name"]}
+    Restaurant Contact Number: {restaurant_details["contact_no"]}
+    Restaurant Address: {restaurant_details["address"]}
+    
+    You are an AI assistant designed to interact with {restaurant_details["restaurant_name"]}'s SQL database to answer queries related to the restaurant's operations, based on the chat history: {memory_context} and input question: {query}.
 
     Guidelines for Query Execution:
     Understanding the Database:

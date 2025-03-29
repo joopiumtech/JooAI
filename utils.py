@@ -28,13 +28,19 @@ def initialize_db():
     return db
 
 
-def fetch_restaurant_name():
+def fetch_restaurant_details():
     db = initialize_db()
 
-    sql_query = f"""SELECT name FROM settings"""
+    sql_query = f"""SELECT name, contact_no, address FROM settings"""
     response = db.run(sql_query)
     modified_res = ast.literal_eval(response)
-    return modified_res[0][0]
+    
+    restaurant_details = {
+        "restaurant_name": modified_res[0][0],
+        "contact_no": modified_res[0][1],
+        "address": modified_res[0][2]
+    }
+    return restaurant_details
 
 
 def verify_password(plain_password, hashed_password):
