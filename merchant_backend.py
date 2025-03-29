@@ -20,7 +20,7 @@ QUERY_CLEANER = re.compile(r"[\"'/]")
 ESCAPE_DB_VALUES = re.compile(r"[\"'\\]")
 
 # Global initializations
-llm = ChatOpenAI(model="gpt-4-turbo", temperature=0, max_retries=1, api_key=os.getenv("OPENAI_API_KEY"), streaming=True, max_completion_tokens=300)
+llm = ChatOpenAI(model="gpt-4-turbo", temperature=0, max_retries=1, api_key=os.getenv("OPENAI_API_KEY"), streaming=True, max_completion_tokens=300)  # Reduced token limit
 db = initialize_db()
 vector_store = initialize_pinecone()
 
@@ -97,7 +97,7 @@ async def query_db_for_merchant(query: str = None, audio_query: bool = False):
         response = await asyncio.to_thread(agent_executor.invoke, {"messages": [{"role": "user", "content": query}]})
         final_answer = response["messages"][-1].content.strip()
 
-        if "I don’t know" in final_answer or "I cannot retrieve" in final_answer:
+        if "I don’t know" in final_answer or "I don't have real-time access" in final_answer or "I cannot retrieve" in final_answer:
             response_text = await asyncio.to_thread(tavily_search, input=query)
         elif "I encountered an issue" in final_answer:
             return {"ai_response": "Oops! Something went wrong. Please try again."}
