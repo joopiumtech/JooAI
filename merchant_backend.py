@@ -20,7 +20,7 @@ QUERY_CLEANER = re.compile(r"[\"'/]")
 ESCAPE_DB_VALUES = re.compile(r"[\"'\\]")
 
 # Global initializations
-llm = ChatOpenAI(model="gpt-4-turbo", temperature=0, max_retries=1, api_key=os.getenv("OPENAI_API_KEY"), streaming=True, max_completion_tokens=300)  # Reduced token limit
+llm = ChatOpenAI(model="gpt-4-turbo", temperature=0, max_retries=1, api_key=os.getenv("OPENAI_API_KEY"), streaming=True, max_completion_tokens=300)
 db = initialize_db()
 vector_store = initialize_pinecone()
 
